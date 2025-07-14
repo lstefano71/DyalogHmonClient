@@ -1,0 +1,121 @@
+# .gitignore for C#/.NET projects
+# Build results
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio Code
+.vscode/
+
+# Rider
+.idea/
+*.sln.iml
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# NuGet
+*.nupkg
+# The packages folder can be ignored because of PackageReference
+packages/
+# except build/, which is used as an MSBuild target.
+!packages/build/
+
+# Others
+*.log
+*.vspscc
+*.vssscc
+*.pdb
+*.mdb
+_ReSharper*/
+
+# Test results
+TestResults/
+*.TestResults/
+
+# Local SQLite DBs
+*.db
+*.sqlite# .gitignore for C# / .NET projects
+# Build results
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Mono Auto Generated Files
+test-results/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Rider and VS Code
+.idea/
+.vscode/
+
+# NuGet
+*.nupkg
+# The packages folder can be ignored if using PackageReference
+packages/
+# except build/, which is used as an MSBuild target.
+!packages/build/
+
+# DotCover
+*.dotCover
+
+# Logs
+*.log
+
+# Others
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.vs/
+
+# Local SQLite DBs
+*.db
+*.sqlite
+
+# Azure Pipelines
+.vsts/
+
+# Backup & temp files
+*~
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# Publish outputs
+publish/
+
+# Test coverage
+coverage/
+
+# NCrunch
+.ncrunch*
+*.ncrunch*
+
+# Visual Studio Code settings
+.history/
+
+# JetBrains Rider
+.idea/
+
+# Visual Studio for Mac
+.vscode/
+
+# Rider logs
+.idea/.idea.log
+
+# Rider project settings
+.idea/.idea.*
