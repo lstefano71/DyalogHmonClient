@@ -361,7 +361,21 @@ public record ThreadCountFact(int Total, int Suspended) : Fact(6, "ThreadCount")
 // Nested models for thread information
 public record ThreadInfo(int Tid, IEnumerable<StackInfo> Stack, bool Suspended, string State, string Flags, DmxInfo? DMX, ExceptionInfo? Exception);
 public record StackInfo(bool Restricted, string? Description);
-public record DmxInfo(bool Restricted, string? Category, int? DM, int? EM, int? EN, string? ENX, string? InternalLocation, string? Vendor, string? Message, int? OSError);
+/// <summary>
+/// Represents ⎕DMX information for a thread, as per RFC 002.
+/// </summary>
+public record DmxInfo(
+  bool Restricted,
+  string? Category,
+  string[]? DM, // DM is now string[] per RFC 002
+  int? EM,
+  int? EN,
+  string? ENX,
+  string? InternalLocation,
+  string? Vendor,
+  string? Message,
+  int? OSError
+);
 public record ExceptionInfo(bool Restricted, object? Source, string? StackTrace, string? Message);
 ```
 

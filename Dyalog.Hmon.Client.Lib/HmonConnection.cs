@@ -1,6 +1,7 @@
 using Dyalog.Hmon.Client.Lib;
 
 using Serilog;// Marker interface for payloads that support UID correlation
+using Serilog.Core;
 
 using System.Buffers;
 using System.Collections.Concurrent;
@@ -15,9 +16,12 @@ using System.Threading.Channels;
 /// </summary>
 internal class HmonConnection : IAsyncDisposable
 {
-
-  private readonly TcpClient _tcpClient;
+  private const string _supportedprotocol = "SupportedProtocols=2";
+  private const string _usingprotocol = "UsingProtocol=2";
   private static readonly DrptFramer HmonFramer = new("HMON");
+
+  private readonly ILogger _logger;
+  private readonly TcpClient _tcpClient;
 
   private readonly Guid _sessionId;
   private readonly ChannelWriter<HmonEvent> _eventWriter;
@@ -26,7 +30,6 @@ internal class HmonConnection : IAsyncDisposable
   private readonly CancellationTokenSource _cts = new();
   private readonly ConcurrentDictionary<string, TaskCompletionSource<HmonEvent>> _pendingRequests = new();
   private readonly TaskCompletionSource<bool> _pipeReadyTcs = new();
-  private readonly Queue<string> _handshakeExpectedPayloads = new Queue<string>();
 
   /// <summary>
   /// Initializes a new HmonConnection for the given TCP client and session.
@@ -38,6 +41,7 @@ internal class HmonConnection : IAsyncDisposable
   /// <param name="onClientConnected">Optional client connected callback.</param>
   public HmonConnection(TcpClient tcpClient, Guid sessionId, ChannelWriter<HmonEvent> eventWriter, Func<Task>? onDisconnect = null, Func<ClientConnectedEventArgs, Task>? onClientConnected = null)
   {
+    _logger = Log.Logger.ForContext<HmonConnection>();
     _tcpClient = tcpClient;
     _sessionId = sessionId;
     _eventWriter = eventWriter;
@@ -54,30 +58,18 @@ internal class HmonConnection : IAsyncDisposable
   /// <param name="friendlyName">Optional friendly name for ClientConnected event.</param>
   public async Task InitializeAsync(CancellationToken ct, string remoteAddress, int remotePort, string? friendlyName = null)
   {
-    var logger = Log.Logger.ForContext<HmonConnection>();
     try {
-      logger.Debug("Initializing HmonConnection (SessionId={SessionId})", _sessionId);
-
-      // Send initial handshake messages
-      var stream = _tcpClient.GetStream();
-      await HmonFramer.WriteFrameAsync(stream, Encoding.UTF8.GetBytes("SupportedProtocols=2"), ct);
-      logger.Debug("SENT Handshake: SupportedProtocols=2");
-      await HmonFramer.WriteFrameAsync(stream, Encoding.UTF8.GetBytes("UsingProtocol=2"), ct);
-      logger.Debug("SENT Handshake: UsingProtocol=2");
-
-      // Populate expected handshake responses
-      _handshakeExpectedPayloads.Enqueue("SupportedProtocols=2");
-      _handshakeExpectedPayloads.Enqueue("UsingProtocol=2");
+      _logger.Debug("Initializing HmonConnection (SessionId={SessionId})", _sessionId);
 
       _ = StartProcessingAsync(ct); // Start processing messages, including handshake responses
       await _pipeReadyTcs.Task; // Wait for pipe to be ready (handshake completed)
 
       if (_onClientConnected != null) {
-        logger.Debug("Firing ClientConnected event from HmonConnection (SessionId={SessionId})", _sessionId);
+        _logger.Debug("Firing ClientConnected event from HmonConnection (SessionId={SessionId})", _sessionId);
         await _onClientConnected.Invoke(new ClientConnectedEventArgs(_sessionId, remoteAddress, remotePort, friendlyName));
       }
     } catch (Exception ex) {
-      logger.Error(ex, "HmonConnection initialization failed (SessionId={SessionId})", _sessionId);
+      _logger.Error(ex, "HmonConnection initialization failed (SessionId={SessionId})", _sessionId);
       throw;
     }
   }
@@ -91,6 +83,7 @@ internal class HmonConnection : IAsyncDisposable
   /// <param name="ct">Cancellation token.</param>
   public async Task<T> SendCommandAsync<T>(string command, object payload, CancellationToken ct) where T : HmonEvent
   {
+    _logger.Warning("SendCommandAsync called with command: {Command}", command);
     string? uid = null;
     object actualPayload = payload;
     if (payload is IUidPayload uidPayload) {
@@ -103,7 +96,7 @@ internal class HmonConnection : IAsyncDisposable
     var json = JsonSerializer.Serialize(new object[] { command, actualPayload });
     var bytes = Encoding.UTF8.GetBytes(json);
 
-    Log.Debug("SEND Message: {Json}", json);
+    _logger.Debug("SEND Message: {Json}", json);
     await HmonFramer.WriteFrameAsync(stream, bytes, ct);
 
     if (uid != null) {
@@ -123,12 +116,8 @@ internal class HmonConnection : IAsyncDisposable
   {
     try {
       var pipe = new Pipe();
-      Task writing = FillPipeAsync(_tcpClient.GetStream(), pipe.Writer, ct);
-      Task reading = ReadPipeAsync(pipe.Reader, ct);
-
-      // _pipeReadyTcs.TrySetResult(); // Signal that the pipe is ready - now done after handshake
-
-      await Task.WhenAll(reading, writing);
+      Task reading = ReadPipeAsync(PipeReader.Create(_tcpClient.GetStream()), ct);
+      await reading;
     } finally {
       if (_onDisconnect != null) {
         await _onDisconnect.Invoke();
@@ -136,71 +125,35 @@ internal class HmonConnection : IAsyncDisposable
     }
   }
 
-  private async Task FillPipeAsync(NetworkStream stream, PipeWriter writer, CancellationToken ct)
-  {
-    const int minimumBufferSize = 512;
-    var logger = Log.Logger.ForContext<HmonConnection>();
-    while (!ct.IsCancellationRequested) {
-      Memory<byte> memory = writer.GetMemory(minimumBufferSize);
-      try {
-        int bytesRead = await stream.ReadAsync(memory, ct);
-        if (bytesRead == 0) break;
-        writer.Advance(bytesRead);
-      } catch (OperationCanceledException) {
-        logger.Debug("FillPipeAsync canceled for session {SessionId}", _sessionId);
-        break;
-      } catch (Exception ex) {
-        logger.Error(ex, "Exception in FillPipeAsync for session {SessionId}", _sessionId);
-        break;
-      }
-
-      FlushResult result = await writer.FlushAsync(ct);
-      if (result.IsCompleted) break;
-    }
-    await writer.CompleteAsync();
-  }
-
   private async Task ReadPipeAsync(PipeReader reader, CancellationToken ct)
   {
     var logger = Log.Logger.ForContext<HmonConnection>();
     try {
+      // Handshake
+      if (!await ProcessHandshakeAsync(reader, ct)) {
+        throw new Exception($"Handshake failed for session: {_sessionId}.");
+      }
+
+      _pipeReadyTcs.TrySetResult(true); // Signal that the pipe is ready after handshake
+      _logger.Debug("Handshake completed for session {SessionId}", _sessionId);
+
       while (!ct.IsCancellationRequested) {
         ReadResult result = await reader.ReadAsync(ct);
         ReadOnlySequence<byte> buffer = result.Buffer;
 
         while (true) // Loop to read all messages in the buffer
         {
-          ReadOnlySequence<byte> message;
-          if (_handshakeExpectedPayloads.Count > 0) {
-            if (!TryReadMessage(ref buffer, out message, true)) // Pass true for handshake
-              break;
-            // Process handshake messages
-            var receivedPayload = Encoding.UTF8.GetString(message.ToArray());
-            logger.Debug("RECV Handshake Message: {Payload}", receivedPayload);
-
-            var expectedPayload = _handshakeExpectedPayloads.Dequeue();
-            if (receivedPayload != expectedPayload) {
-              throw new InvalidOperationException($"Handshake payload mismatch. Expected '{expectedPayload}', got '{receivedPayload}'");
-            }
-
-            if (_handshakeExpectedPayloads.Count == 0) {
-              _pipeReadyTcs.TrySetResult(true); // Handshake completed, signal pipe is ready
-              logger.Debug("Handshake completed for session {SessionId}", _sessionId);
-            }
-          } else {
-            if (!TryReadMessage(ref buffer, out message, false)) // Pass false for normal messages
-              break;
-            // Normal message processing
-            logger.Debug("RECV Message: {Raw}", Encoding.UTF8.GetString(message.ToArray()));
-            await ParseAndDispatchMessageAsync(message);
-          }
+          if (!TryReadMessage(ref buffer, out ReadOnlySequence<byte> message))
+            break;
+          // Normal message processing
+          await ParseAndDispatchMessageAsync(message);
         }
 
         reader.AdvanceTo(buffer.Start, buffer.End);
         if (result.IsCompleted) break;
       }
     } catch (OperationCanceledException) {
-      logger.Debug("ReadPipeAsync canceled for session {SessionId}", _sessionId);
+      _logger.Debug("ReadPipeAsync canceled for session {SessionId}", _sessionId);
     } catch (Exception ex) {
       logger.Error(ex, "Exception in ReadPipeAsync for session {SessionId}", _sessionId);
     } finally {
@@ -208,7 +161,49 @@ internal class HmonConnection : IAsyncDisposable
     }
   }
 
-  private bool TryReadMessage(ref ReadOnlySequence<byte> buffer, out ReadOnlySequence<byte> message, bool isHandshake)
+  private async Task<bool> ProcessHandshakeAsync(PipeReader reader, CancellationToken ct)
+  {
+    var stream = _tcpClient.GetStream();
+    await HmonFramer.WriteFrameAsync(stream, _supportedprotocol, ct);
+    var msg = await ReadMessageAsStringAsync(reader, ct);
+    if (msg != _supportedprotocol) {
+      _logger.Error("Handshake failed: expected '{supportedprotocol}', got '{Message}'", _supportedprotocol, msg);
+      return false; // Handshake failed
+    }
+    await HmonFramer.WriteFrameAsync(stream, _usingprotocol, ct);
+    msg = await ReadMessageAsStringAsync(reader, ct);
+    if (msg != _usingprotocol) {
+      _logger.Error("Handshake failed: expected '{usingprotocol}', got '{Message}'", _usingprotocol, msg);
+      return false; // Handshake failed
+    }
+    return true; // Handshake successful
+  }
+
+  private async Task<string> ReadMessageAsStringAsync(PipeReader reader, CancellationToken ct)
+  {
+    try {
+      while (true) {
+        ReadResult result = await reader.ReadAsync(ct);
+        ReadOnlySequence<byte> buffer = result.Buffer;
+        if (TryReadMessage(ref buffer, out var message)) {
+          var messageBytes = Encoding.UTF8.GetString(message.ToArray());
+          reader.AdvanceTo(buffer.Start);
+          return messageBytes;
+        }
+        if (result.IsCompleted && buffer.IsEmpty) {
+          throw new EndOfStreamException("No more data available in the stream.");
+        }
+      }
+    } catch (OperationCanceledException) {
+      _logger.Debug("ReadMessageAsStringAsync canceled for session {SessionId}", _sessionId);
+      throw;
+    } catch (Exception ex) {
+      _logger.Error(ex, "Error reading message as string for session {SessionId}", _sessionId);
+      throw;
+    }
+  }
+
+  private bool TryReadMessage(ref ReadOnlySequence<byte> buffer, out ReadOnlySequence<byte> message)
   {
     message = default;
     if (buffer.Length < 4) return false; // Not enough for length prefix
@@ -219,20 +214,21 @@ internal class HmonConnection : IAsyncDisposable
 
     int headerOffset = 4; // For length prefix
 
-    if (isHandshake) {
-      if (buffer.Length < 8) return false; // Not enough for length + magic
-      var magicBytes = buffer.Slice(4, 4).ToArray();
-      // Validate magic number: 0x48, 0x4D, 0x4F, 0x4E (HMON)
-      if (!(magicBytes[0] == 0x48 && magicBytes[1] == 0x4D && magicBytes[2] == 0x4F && magicBytes[3] == 0x4E)) {
-        throw new InvalidOperationException("Invalid handshake magic number encountered.");
-      }
-      headerOffset = 8; // For length + magic
+    if (buffer.Length < 8) return false; // Not enough for length + magic
+    var magicBytes = buffer.Slice(4, 4).ToArray();
+    // Validate magic number using the framer's magic
+    if (!magicBytes.AsSpan().SequenceEqual(HmonFramer.Magic)) {
+      throw new InvalidOperationException($"Invalid handshake magic number encountered. Expected '{Encoding.ASCII.GetString(HmonFramer.Magic)}', got '{Encoding.ASCII.GetString(magicBytes)}'");
     }
+    headerOffset = 8; // For length + magic
 
-    if (buffer.Length < messageLength + headerOffset) return false; // Not enough for full message
+    // FIX: Only require messageLength bytes (total frame size) in buffer
+    if (buffer.Length < messageLength) return false; // Not enough for full message
 
     message = buffer.Slice(headerOffset, messageLength - headerOffset); // Adjust slice for magic number
     buffer = buffer.Slice(message.End);
+
+    _logger.Debug("{direction} Message: {Raw}", "RECV", Encoding.UTF8.GetString(message.ToArray()));
     return true;
   }
 

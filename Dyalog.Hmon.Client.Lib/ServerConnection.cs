@@ -85,11 +85,11 @@ internal class ServerConnection : IAsyncDisposable
             _onClientConnected // Pass the ClientConnected event handler
         );
 
+        // Register the connection in the orchestrator before firing ClientConnected
+        _registerConnection?.Invoke(_hmonConnection);
+
         // Initialize the HmonConnection, which will also fire ClientConnected
         await _hmonConnection.InitializeAsync(ct, _host, _port, _friendlyName);
-
-        // Register the connection in the orchestrator after successful initialization
-        _registerConnection?.Invoke(_hmonConnection);
 
         return; // Connection successful, exit the retry loop.
       } catch (Exception ex) {

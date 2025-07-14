@@ -8,11 +8,6 @@ class Program
 {
   static async Task RunMonitoringService(CancellationToken cancellationToken)
   {
-    Log.Logger = new LoggerConfiguration()
-        .WriteTo.Console()
-        .MinimumLevel.Debug()
-        .CreateLogger();
-
     Console.WriteLine("Starting Dyalog.Hmon.Client monitoring service...");
 
     await using var orchestrator = new HmonOrchestrator();
@@ -24,42 +19,36 @@ class Program
       }
     });
 
-    orchestrator.ClientConnected += (args) => {
+    orchestrator.ClientConnected += async (args) => {
       Log.Information("[+] CONNECTED: {Name} (Session: {SessionId})", args.FriendlyName ?? args.Host, args.SessionId);
 
       // Shared timeout for orchestrator operations
       var orchestratorTimeout = TimeSpan.FromSeconds(20);
 
       Log.Debug("Subscribing to UntrappedSignal events for session {SessionId}", args.SessionId);
-      _ = Task.Run(async () => {
-        try {
-          var subscribeTask = orchestrator.SubscribeAsync(args.SessionId, [SubscriptionEvent.UntrappedSignal], cancellationToken);
-          if (await Task.WhenAny(subscribeTask, Task.Delay(orchestratorTimeout, cancellationToken)) == subscribeTask) {
-            // Log.Debug("AFTER await SubscribeAsync"); // Removed redundant log
-          } else {
-            Log.Error("SubscribeAsync timed out after {Timeout} seconds", orchestratorTimeout.TotalSeconds);
-          }
-        } catch (Exception ex) {
-          Log.Error(ex, "Exception during SubscribeAsync");
+      try {
+        var subscribeTask = orchestrator.SubscribeAsync(args.SessionId, [SubscriptionEvent.UntrappedSignal], cancellationToken);
+        if (await Task.WhenAny(subscribeTask, Task.Delay(orchestratorTimeout, cancellationToken)) == subscribeTask) {
+          Log.Debug("AFTER await SubscribeAsync"); // Removed redundant log
+        } else {
+          Log.Error("SubscribeAsync timed out after {Timeout} seconds", orchestratorTimeout.TotalSeconds);
         }
-        Log.Debug("Subscription to UntrappedSignal complete for session {SessionId}", args.SessionId);
-      });
+      } catch (Exception ex) {
+        Log.Error(ex, "Exception during SubscribeAsync");
+      }
+      Log.Debug("Subscription to UntrappedSignal complete for session {SessionId}", args.SessionId);
 
       Log.Debug("Starting PollFacts for Workspace and ThreadCount for session {SessionId}", args.SessionId);
-      _ = Task.Run(async () => {
-        try {
-          var pollTask = orchestrator.PollFactsAsync(args.SessionId, [FactType.Workspace, FactType.ThreadCount], TimeSpan.FromSeconds(5), cancellationToken);
-          if (await Task.WhenAny(pollTask, Task.Delay(orchestratorTimeout, cancellationToken)) == pollTask) {
-            Log.Debug("PollFacts started for session {SessionId}", args.SessionId);
-          } else {
-            Log.Error("PollFactsAsync timed out after {Timeout} seconds", orchestratorTimeout.TotalSeconds);
-          }
-        } catch (Exception ex) {
-          Log.Error(ex, "Exception during PollFactsAsync");
+      try {
+        var pollTask = orchestrator.PollFactsAsync(args.SessionId, [FactType.Workspace, FactType.ThreadCount], TimeSpan.FromSeconds(5), cancellationToken);
+        if (await Task.WhenAny(pollTask, Task.Delay(orchestratorTimeout, cancellationToken)) == pollTask) {
+          Log.Debug("PollFacts started for session {SessionId}", args.SessionId);
+        } else {
+          Log.Error("PollFactsAsync timed out after {Timeout} seconds", orchestratorTimeout.TotalSeconds);
         }
-      });
-
-      return Task.CompletedTask;
+      } catch (Exception ex) {
+        Log.Error(ex, "Exception during PollFactsAsync");
+      }
     };
 
     orchestrator.ClientDisconnected += (args) => {
@@ -79,6 +68,11 @@ class Program
 
   static async Task Main(string[] args)
   {
+    Log.Logger = new LoggerConfiguration()
+        .WriteTo.Console()
+        .MinimumLevel.Debug()
+        .CreateLogger();
+
     using var cts = new CancellationTokenSource();
     var runTask = RunMonitoringService(cts.Token);
     Console.ReadLine();

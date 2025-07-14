@@ -70,7 +70,31 @@ namespace Dyalog.Hmon.Client.Lib
   public record ThreadCountFact(int Total, int Suspended) : Fact(6, "ThreadCount");
   public record ThreadInfo(int Tid, IEnumerable<StackInfo> Stack, bool Suspended, string State, string Flags, DmxInfo? DMX, ExceptionInfo? Exception);
   public record StackInfo(bool Restricted, string? Description);
-  public record DmxInfo(bool Restricted, string? Category, int? DM, int? EM, int? EN, string? ENX, string? InternalLocation, string? Vendor, string? Message, int? OSError);
+  /// <summary>
+  /// Represents ⎕DMX information for a thread, as per RFC 002 and protocol sample.
+  /// </summary>
+  public record DmxInfo(
+    /// <summary>0/1 in protocol, true if restricted, false otherwise.</summary>
+    int Restricted,
+    /// <summary>Category string.</summary>
+    string? Category,
+    /// <summary>DM: string[3] array.</summary>
+    string[]? DM,
+    /// <summary>EM: string (error message).</summary>
+    string? EM,
+    /// <summary>EN: integer (error number).</summary>
+    int? EN,
+    /// <summary>ENX: integer (extended error number).</summary>
+    int? ENX,
+    /// <summary>InternalLocation: string[] (was tuple (string, int)).</summary>
+    [property: JsonConverter(typeof(InternalLocationInfoConverter))] InternalLocationInfo? InternalLocation,
+    /// <summary>Vendor: string.</summary>
+    string? Vendor,
+    /// <summary>Message: string.</summary>
+    string? Message,
+    /// <summary>OSError: array [int, int, string].</summary>
+    object? OSError
+  );
   public record ExceptionInfo(bool Restricted, object? Source, string? StackTrace, string? Message);
 
   public record NotificationResponse(string? UID, EventInfo Event, long? Size, int? Tid, IEnumerable<StackInfo>? Stack, DmxInfo? DMX, ExceptionInfo? Exception);
@@ -95,4 +119,32 @@ namespace Dyalog.Hmon.Client.Lib
   public record MalformedCommandResponse(string? UID, string Name);
   public record InvalidSyntaxResponse();
   public record DisallowedUidResponse(string? UID, string Name);
+  public record InternalLocationInfo(string File, int Line);
+
+  public class InternalLocationInfoConverter : JsonConverter<InternalLocationInfo?>
+  {
+    public override InternalLocationInfo? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+      if (reader.TokenType != JsonTokenType.StartArray)
+        return null;
+      reader.Read();
+      var file = reader.GetString();
+      reader.Read();
+      var line = reader.GetInt32();
+      reader.Read(); // EndArray
+      return new InternalLocationInfo(file!, line);
+    }
+    public override void Write(Utf8JsonWriter writer, InternalLocationInfo? value, JsonSerializerOptions options)
+    {
+      if (value == null)
+      {
+        writer.WriteNullValue();
+        return;
+      }
+      writer.WriteStartArray();
+      writer.WriteStringValue(value.File);
+      writer.WriteNumberValue(value.Line);
+      writer.WriteEndArray();
+    }
+  }
 }
