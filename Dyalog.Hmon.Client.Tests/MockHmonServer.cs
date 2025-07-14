@@ -89,7 +89,7 @@ public class MockHmonServer : IDisposable
                 var totalLength = 8 + payloadBytes.Length;
                 var lengthBytes = BitConverter.GetBytes(totalLength);
                 if (BitConverter.IsLittleEndian) Array.Reverse(lengthBytes);
-                byte[] invalidMagic = { 0x00, 0x00, 0x00, 0x00 };
+                byte[] invalidMagic = [0x00, 0x00, 0x00, 0x00];
                 await _stream.WriteAsync(lengthBytes, ct);
                 await _stream.WriteAsync(invalidMagic, ct);
                 await _stream.WriteAsync(payloadBytes, ct);
@@ -120,7 +120,7 @@ public class MockHmonServer : IDisposable
         var totalLength = 8 + payloadBytes.Length;
         var lengthBytes = BitConverter.GetBytes(totalLength);
         if (BitConverter.IsLittleEndian) Array.Reverse(lengthBytes);
-        byte[] magic = { 0x48, 0x4D, 0x4F, 0x4E };
+        byte[] magic = [0x48, 0x4D, 0x4F, 0x4E];
         await stream.WriteAsync(lengthBytes, ct);
         await stream.WriteAsync(magic, ct);
         await stream.WriteAsync(payloadBytes, ct);

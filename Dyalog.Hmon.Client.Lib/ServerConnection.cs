@@ -167,7 +167,7 @@ internal class ServerConnection : IAsyncDisposable
         var totalLength = 8 + payloadBytes.Length;
         var lengthBytes = BitConverter.GetBytes(totalLength);
         if (BitConverter.IsLittleEndian) Array.Reverse(lengthBytes);
-        byte[] magic = { 0x48, 0x4D, 0x4F, 0x4E };
+        byte[] magic = [0x48, 0x4D, 0x4F, 0x4E];
         await stream.WriteAsync(lengthBytes, ct);
         await stream.WriteAsync(magic, ct);
         await stream.WriteAsync(payloadBytes, ct);

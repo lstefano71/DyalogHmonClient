@@ -1,7 +1,18 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Dyalog.Hmon.Client.Lib;
+namespace Dyalog.Hmon.Client.Lib
+{
+    // Marker interface for payloads that support UID correlation
+    public interface IUidPayload
+    {
+        string? UID { get; set; }
+    }
+    // Payloads for commands that require UID correlation
+    public record GetFactsPayload(int[] Facts) : IUidPayload { public string? UID { get; set; } }
+    public record PollFactsPayload(int[] Facts, int Interval) : IUidPayload { public string? UID { get; set; } }
+    public record SubscribePayload(int[] Events) : IUidPayload { public string? UID { get; set; } }
+    public record LastKnownStatePayload() : IUidPayload { public string? UID { get; set; } }
 
 // Configuration
 public record HmonOrchestratorOptions
@@ -84,3 +95,4 @@ public record UnknownCommandResponse(string? UID, string Name);
 public record MalformedCommandResponse(string? UID, string Name);
 public record InvalidSyntaxResponse();
 public record DisallowedUidResponse(string? UID, string Name);
+}

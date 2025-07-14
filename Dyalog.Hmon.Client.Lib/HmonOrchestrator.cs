@@ -146,11 +146,7 @@ public class HmonOrchestrator : IAsyncDisposable
             Serilog.Log.Logger.ForContext<HmonOrchestrator>().Error("GetFactsAsync: Session not found for sessionId={SessionId}", sessionId);
             throw new InvalidOperationException("Session not found");
         }
-        var payload = new
-        {
-            Facts = facts.Select(f => (int)f).ToArray(),
-            UID = Guid.NewGuid().ToString()
-        };
+        var payload = new GetFactsPayload(facts.Select(f => (int)f).ToArray());
         var evt = await conn.SendCommandAsync<FactsReceivedEvent>("GetFacts", payload, ct);
         return evt.Facts;
     }
@@ -164,7 +160,7 @@ public class HmonOrchestrator : IAsyncDisposable
     {
         if (!_connections.TryGetValue(sessionId, out var conn))
             throw new InvalidOperationException("Session not found");
-        var payload = new { UID = Guid.NewGuid().ToString() };
+        var payload = new LastKnownStatePayload();
         var evt = await conn.SendCommandAsync<LastKnownStateReceivedEvent>("GetLastKnownState", payload, ct);
         return evt.State;
     }
@@ -180,12 +176,7 @@ public class HmonOrchestrator : IAsyncDisposable
     {
         if (!_connections.TryGetValue(sessionId, out var conn))
             throw new InvalidOperationException("Session not found");
-        var payload = new
-        {
-            Facts = facts.Select(f => (int)f).ToArray(),
-            Interval = (int)interval.TotalMilliseconds,
-            UID = Guid.NewGuid().ToString()
-        };
+        var payload = new PollFactsPayload(facts.Select(f => (int)f).ToArray(), (int)interval.TotalMilliseconds);
         await conn.SendCommandAsync<FactsReceivedEvent>("PollFacts", payload, ct);
     }
 
@@ -225,11 +216,7 @@ public class HmonOrchestrator : IAsyncDisposable
     {
         if (!_connections.TryGetValue(sessionId, out var conn))
             throw new InvalidOperationException("Session not found");
-        var payload = new
-        {
-            Events = events.Select(e => (int)e).ToArray(),
-            UID = Guid.NewGuid().ToString()
-        };
+        var payload = new SubscribePayload(events.Select(e => (int)e).ToArray());
         await conn.SendCommandAsync<SubscribedResponseReceivedEvent>("Subscribe", payload, ct);
     }
 

@@ -20,47 +20,67 @@ class Program
 
         await using var orchestrator = new HmonOrchestrator();
 
-        orchestrator.ClientConnected += async (args) =>
+        // Unified event stream: start as early as possible
+        var eventTask = Task.Run(async () =>
+        {
+            await foreach (var evt in orchestrator.Events.WithCancellation(cancellationToken))
+            {
+                Log.Information("Event: {EventType} (Session: {SessionId})", evt.GetType().Name, evt.SessionId);
+            }
+        });
+
+        orchestrator.ClientConnected += (args) =>
         {
             Log.Information("[+] CONNECTED: {Name} (Session: {SessionId})", args.FriendlyName ?? args.Host, args.SessionId);
 
+            // Shared timeout for orchestrator operations
+            var orchestratorTimeout = TimeSpan.FromSeconds(20);
+
             Log.Debug("Subscribing to UntrappedSignal events for session {SessionId}", args.SessionId);
-            Log.Debug("BEFORE await SubscribeAsync");
-            try
+            Log.Debug("BEFORE SubscribeAsync (fire-and-forget)");
+            _ = Task.Run(async () =>
             {
-                var subscribeTask = orchestrator.SubscribeAsync(args.SessionId, new[] { SubscriptionEvent.UntrappedSignal }, cancellationToken);
-                if (await Task.WhenAny(subscribeTask, Task.Delay(TimeSpan.FromSeconds(10), cancellationToken)) == subscribeTask)
+                try
                 {
-                    Log.Debug("AFTER await SubscribeAsync");
+                    var subscribeTask = orchestrator.SubscribeAsync(args.SessionId, [SubscriptionEvent.UntrappedSignal], cancellationToken);
+                    if (await Task.WhenAny(subscribeTask, Task.Delay(orchestratorTimeout, cancellationToken)) == subscribeTask)
+                    {
+                        Log.Debug("AFTER await SubscribeAsync");
+                    }
+                    else
+                    {
+                        Log.Error("SubscribeAsync timed out after {Timeout} seconds", orchestratorTimeout.TotalSeconds);
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    Log.Error("SubscribeAsync timed out after 10 seconds");
+                    Log.Error(ex, "Exception during SubscribeAsync");
                 }
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Exception during SubscribeAsync");
-            }
-            Log.Debug("Subscription to UntrappedSignal complete for session {SessionId}", args.SessionId);
+                Log.Debug("Subscription to UntrappedSignal complete for session {SessionId}", args.SessionId);
+            });
 
             Log.Debug("Starting PollFacts for Workspace and ThreadCount for session {SessionId}", args.SessionId);
-            try
+            _ = Task.Run(async () =>
             {
-                var pollTask = orchestrator.PollFactsAsync(args.SessionId, new[] { FactType.Workspace, FactType.ThreadCount }, TimeSpan.FromSeconds(5), cancellationToken);
-                if (await Task.WhenAny(pollTask, Task.Delay(TimeSpan.FromSeconds(10), cancellationToken)) == pollTask)
+                try
                 {
-                    Log.Debug("PollFacts started for session {SessionId}", args.SessionId);
+                    var pollTask = orchestrator.PollFactsAsync(args.SessionId, [FactType.Workspace, FactType.ThreadCount], TimeSpan.FromSeconds(5), cancellationToken);
+                    if (await Task.WhenAny(pollTask, Task.Delay(orchestratorTimeout, cancellationToken)) == pollTask)
+                    {
+                        Log.Debug("PollFacts started for session {SessionId}", args.SessionId);
+                    }
+                    else
+                    {
+                        Log.Error("PollFactsAsync timed out after {Timeout} seconds", orchestratorTimeout.TotalSeconds);
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    Log.Error("PollFactsAsync timed out after 10 seconds");
+                    Log.Error(ex, "Exception during PollFactsAsync");
                 }
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Exception during PollFactsAsync");
-            }
+            });
+
+            return Task.CompletedTask;
         };
 
         orchestrator.ClientDisconnected += (args) =>
@@ -71,15 +91,6 @@ class Program
 
         // Add the local server for demo
         orchestrator.AddServer("127.0.0.1", 8080, "ExampleServer");
-
-        // Unified event stream
-        var eventTask = Task.Run(async () =>
-        {
-            await foreach (var evt in orchestrator.Events.WithCancellation(cancellationToken))
-            {
-                Log.Information("Event: {EventType} (Session: {SessionId})", evt.GetType().Name, evt.SessionId);
-            }
-        });
 
         Log.Information("Press Enter to exit...");
         Console.ReadLine();

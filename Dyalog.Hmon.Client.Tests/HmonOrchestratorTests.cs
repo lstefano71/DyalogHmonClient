@@ -46,7 +46,7 @@ public class HmonOrchestratorTests
         var orchestrator = new HmonOrchestrator();
         await Assert.ThrowsAsync<System.InvalidOperationException>(async () =>
         {
-            await orchestrator.GetFactsAsync(System.Guid.NewGuid(), new[] { FactType.Host });
+            await orchestrator.GetFactsAsync(System.Guid.NewGuid(), [FactType.Host]);
         });
     }
 
@@ -56,7 +56,7 @@ public class HmonOrchestratorTests
         var orchestrator = new HmonOrchestrator();
         await Assert.ThrowsAsync<System.InvalidOperationException>(async () =>
         {
-            await orchestrator.SubscribeAsync(System.Guid.NewGuid(), new[] { SubscriptionEvent.WorkspaceCompaction });
+            await orchestrator.SubscribeAsync(System.Guid.NewGuid(), [SubscriptionEvent.WorkspaceCompaction]);
         });
     }
 }

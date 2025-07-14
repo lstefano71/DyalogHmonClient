@@ -5,16 +5,18 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
-using Serilog;
-
-namespace Dyalog.Hmon.Client.Lib;
+using Serilog;// Marker interface for payloads that support UID correlation
+using Dyalog.Hmon.Client.Lib;
 
 /// <summary>
 /// Represents a single HMON protocol connection, handling framing, handshake, and event dispatch.
 /// </summary>
 internal class HmonConnection : IAsyncDisposable
 {
+
     private readonly TcpClient _tcpClient;
+    private static readonly DrptFramer HmonFramer = new DrptFramer("HMON");
+    private readonly DrptFramer _framer = HmonFramer;
 
     // --- Handshake implementation ---
 
@@ -30,38 +32,13 @@ internal class HmonConnection : IAsyncDisposable
     private static async Task SendHandshakeFrameAsync(NetworkStream stream, string payload, CancellationToken ct)
     {
         var payloadBytes = Encoding.UTF8.GetBytes(payload);
-        var totalLength = 8 + payloadBytes.Length;
-        var lengthBytes = BitConverter.GetBytes(totalLength);
-        if (BitConverter.IsLittleEndian) Array.Reverse(lengthBytes);
-
-        // Magic number for HMON: 0x48 0x4D 0x4F 0x4E ("HMON")
-        byte[] magic = { 0x48, 0x4D, 0x4F, 0x4E };
-
         Log.Debug("SEND HandshakeFrame: {Payload}", payload);
-
-        await stream.WriteAsync(lengthBytes, ct);
-        await stream.WriteAsync(magic, ct);
-        await stream.WriteAsync(payloadBytes, ct);
+        await HmonFramer.WriteFrameAsync(stream, payloadBytes, ct);
     }
 
     private static async Task ReceiveHandshakeFrameAsync(NetworkStream stream, string expectedPayload, CancellationToken ct)
     {
-        // Read total length (4 bytes)
-        var lengthBytes = new byte[4];
-        await ReadExactAsync(stream, lengthBytes, ct);
-        if (BitConverter.IsLittleEndian) Array.Reverse(lengthBytes);
-        int totalLength = BitConverter.ToInt32(lengthBytes, 0);
-
-        // Read magic (4 bytes)
-        var magic = new byte[4];
-        await ReadExactAsync(stream, magic, ct);
-        if (!(magic[0] == 0x48 && magic[1] == 0x4D && magic[2] == 0x4F && magic[3] == 0x4E))
-            throw new InvalidOperationException("Invalid handshake magic number");
-
-        // Read payload
-        int payloadLen = totalLength - 8;
-        var payloadBytes = new byte[payloadLen];
-        await ReadExactAsync(stream, payloadBytes, ct);
+        var payloadBytes = await HmonFramer.ReadFrameAsync(stream, ct);
         var payload = Encoding.UTF8.GetString(payloadBytes);
         if (payload != expectedPayload)
             throw new InvalidOperationException($"Handshake payload mismatch. Expected '{expectedPayload}', got '{payload}'");
@@ -69,13 +46,7 @@ internal class HmonConnection : IAsyncDisposable
 
     private static async Task ReadExactAsync(NetworkStream stream, byte[] buffer, CancellationToken ct)
     {
-        int offset = 0;
-        while (offset < buffer.Length)
-        {
-            int read = await stream.ReadAsync(buffer.AsMemory(offset, buffer.Length - offset), ct);
-            if (read == 0) throw new IOException("Unexpected end of stream during handshake");
-            offset += read;
-        }
+        await DrptFramer.ReadExactAsync(stream, buffer, ct);
     }
     private readonly Guid _sessionId;
     private readonly ChannelWriter<HmonEvent> _eventWriter;
@@ -108,28 +79,36 @@ internal class HmonConnection : IAsyncDisposable
     /// <param name="ct">Cancellation token.</param>
     public async Task<T> SendCommandAsync<T>(string command, object payload, CancellationToken ct) where T : HmonEvent
     {
-        var uid = Guid.NewGuid().ToString();
-        var tcs = new TaskCompletionSource<HmonEvent>();
-        _pendingRequests.TryAdd(uid, tcs);
+        string? uid = null;
+        object actualPayload = payload;
+        if (payload is IUidPayload uidPayload)
+        {
+            uid = Guid.NewGuid().ToString();
+            uidPayload.UID = uid;
+            actualPayload = payload;
+        }
 
         var stream = _tcpClient.GetStream();
-        var json = JsonSerializer.Serialize(new object[] { command, payload });
+        var json = JsonSerializer.Serialize(new object[] { command, actualPayload });
         var bytes = Encoding.UTF8.GetBytes(json);
-        var totalLength = 8 + bytes.Length;
-        var length = BitConverter.GetBytes(totalLength);
-        if (BitConverter.IsLittleEndian) Array.Reverse(length);
-        byte[] magic = { 0x48, 0x4D, 0x4F, 0x4E }; // "HMON"
 
         Log.Debug("SEND Message: {Json}", json);
-        
-        await stream.WriteAsync(length, ct);
-        await stream.WriteAsync(magic, ct);
-        await stream.WriteAsync(bytes, ct);
+        await _framer.WriteFrameAsync(stream, bytes, ct);
 
-        using (ct.Register(() => tcs.TrySetCanceled()))
+        if (uid != null)
         {
-            var result = await tcs.Task;
-            return (T)result;
+            var tcs = new TaskCompletionSource<HmonEvent>();
+            _pendingRequests.TryAdd(uid, tcs);
+            using (ct.Register(() => tcs.TrySetCanceled()))
+            {
+                var result = await tcs.Task;
+                return (T)result;
+            }
+        }
+        else
+        {
+            // No UID, fire-and-forget, return default
+            return default!;
         }
     }
 
