@@ -1,8 +1,12 @@
 using System.Net.Sockets;
 using System.Threading.Channels;
+using Serilog;
 
 namespace Dyalog.Hmon.Client.Lib;
 
+/// <summary>
+/// Manages a remote HMON server connection with retry and reconnection logic.
+/// </summary>
 internal class ServerConnection : IAsyncDisposable
 {
     private readonly string _host;
@@ -16,6 +20,17 @@ internal class ServerConnection : IAsyncDisposable
     private readonly CancellationTokenSource _cts = new();
     private HmonConnection? _hmonConnection;
 
+    /// <summary>
+    /// Initializes a new ServerConnection and starts connection management.
+    /// </summary>
+    /// <param name="host">Remote host address.</param>
+    /// <param name="port">Remote port.</param>
+    /// <param name="friendlyName">Optional friendly name.</param>
+    /// <param name="options">Orchestrator options.</param>
+    /// <param name="eventWriter">Channel writer for events.</param>
+    /// <param name="sessionId">Session identifier.</param>
+    /// <param name="onClientConnected">Callback for client connected.</param>
+    /// <param name="onClientDisconnected">Callback for client disconnected.</param>
     public ServerConnection(
         string host,
         int port,
@@ -41,16 +56,21 @@ internal class ServerConnection : IAsyncDisposable
     {
         var retryPolicy = _options.ConnectionRetryPolicy;
         var delay = retryPolicy.InitialDelay;
+        var logger = Log.Logger.ForContext<ServerConnection>();
 
         while (!ct.IsCancellationRequested)
         {
             try
             {
+                logger.Debug("Attempting to connect to {Host}:{Port} (SessionId={SessionId})", _host, _port, _sessionId);
                 var tcpClient = new TcpClient();
                 await tcpClient.ConnectAsync(_host, _port, ct);
 
+                logger.Information("Connection established to {Host}:{Port} (SessionId={SessionId})", _host, _port, _sessionId);
+
                 _hmonConnection = new HmonConnection(tcpClient, _sessionId, _eventWriter, async () =>
                 {
+                    logger.Debug("Connection closed for {Host}:{Port} (SessionId={SessionId}), attempting reconnect", _host, _port, _sessionId);
                     if (_onClientDisconnected != null)
                     {
                         await _onClientDisconnected.Invoke(new ClientDisconnectedEventArgs(_sessionId, _host, _port, _friendlyName, "Connection closed"));
@@ -67,6 +87,7 @@ internal class ServerConnection : IAsyncDisposable
             }
             catch (Exception ex)
             {
+                logger.Error(ex, "Connection attempt failed to {Host}:{Port} (SessionId={SessionId}), retrying in {Delay}ms", _host, _port, _sessionId, delay.TotalMilliseconds);
                 if (_onClientDisconnected != null)
                 {
                     await _onClientDisconnected.Invoke(new ClientDisconnectedEventArgs(_sessionId, _host, _port, _friendlyName, ex.Message));
@@ -79,6 +100,9 @@ internal class ServerConnection : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Disposes the server connection and releases resources.
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
         _cts.Cancel();

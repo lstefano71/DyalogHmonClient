@@ -5,9 +5,13 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
+using Serilog;
 
 namespace Dyalog.Hmon.Client.Lib;
 
+/// <summary>
+/// Represents a single HMON protocol connection, handling framing, handshake, and event dispatch.
+/// </summary>
 internal class HmonConnection : IAsyncDisposable
 {
     private readonly TcpClient _tcpClient;
@@ -78,6 +82,13 @@ internal class HmonConnection : IAsyncDisposable
     private readonly CancellationTokenSource _cts = new();
     private readonly ConcurrentDictionary<string, TaskCompletionSource<HmonEvent>> _pendingRequests = new();
 
+    /// <summary>
+    /// Initializes a new HmonConnection for the given TCP client and session.
+    /// </summary>
+    /// <param name="tcpClient">Underlying TCP client.</param>
+    /// <param name="sessionId">Session identifier.</param>
+    /// <param name="eventWriter">Channel writer for events.</param>
+    /// <param name="onDisconnect">Optional disconnect callback.</param>
     public HmonConnection(TcpClient tcpClient, Guid sessionId, ChannelWriter<HmonEvent> eventWriter, Func<Task>? onDisconnect = null)
     {
         _tcpClient = tcpClient;
@@ -87,6 +98,13 @@ internal class HmonConnection : IAsyncDisposable
         _ = StartProcessingAsync(_cts.Token);
     }
 
+    /// <summary>
+    /// Sends a command to the interpreter and awaits a strongly-typed event response.
+    /// </summary>
+    /// <typeparam name="T">Expected event type.</typeparam>
+    /// <param name="command">Command name.</param>
+    /// <param name="payload">Command payload.</param>
+    /// <param name="ct">Cancellation token.</param>
     public async Task<T> SendCommandAsync<T>(string command, object payload, CancellationToken ct) where T : HmonEvent
     {
         var uid = Guid.NewGuid().ToString();
@@ -130,6 +148,7 @@ internal class HmonConnection : IAsyncDisposable
     private async Task FillPipeAsync(NetworkStream stream, PipeWriter writer, CancellationToken ct)
     {
         const int minimumBufferSize = 512;
+        var logger = Log.Logger.ForContext<HmonConnection>();
         while (!ct.IsCancellationRequested)
         {
             Memory<byte> memory = writer.GetMemory(minimumBufferSize);
@@ -141,11 +160,12 @@ internal class HmonConnection : IAsyncDisposable
             }
             catch (OperationCanceledException)
             {
+                logger.Debug("FillPipeAsync canceled for session {SessionId}", _sessionId);
                 break;
             }
             catch (Exception ex)
             {
-                // Handle exception
+                logger.Error(ex, "Exception in FillPipeAsync for session {SessionId}", _sessionId);
                 break;
             }
 
@@ -256,6 +276,9 @@ internal class HmonConnection : IAsyncDisposable
         };
     }
 
+    /// <summary>
+    /// Disposes the connection and releases resources.
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
         _cts.Cancel();

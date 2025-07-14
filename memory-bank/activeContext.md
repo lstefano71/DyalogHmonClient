@@ -10,6 +10,9 @@
 - Reviewing and updating all documentation, including README.md.
 
 ## Recent Changes
+- XML documentation added to all public APIs in HmonOrchestrator, ServerConnection, and HmonConnection.
+- Serilog logging integrated in HmonOrchestrator for connection lifecycle, handshake failures, and disposal.
+- Serilog logging integrated in ServerConnection and HmonConnection for connection attempts, failures, and error diagnostics.
 - All HmonOrchestrator interaction API methods implemented, using HmonConnection and matching HMON protocol.
 - Handshake logic (RFC 001/002) implemented in HmonConnection and invoked by HmonOrchestrator before consumer events.
 - Failed handshakes now result in immediate connection cleanup and are not exposed to consumers.

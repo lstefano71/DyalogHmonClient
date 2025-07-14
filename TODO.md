@@ -67,11 +67,11 @@ This document outlines the tasks required to implement the `Dyalog.Hmon.Client` 
 - [x] **Performance**
     - [x] Integrate `System.IO.Pipelines` for efficient network I/O.
     - [x] Ensure `System.Text.Json` source generation is correctly implemented.
-- [ ] **Reliability**
-    - [ ] Thoroughly test connection retry logic.
-    - [ ] Ensure robust error handling and state management.
-- [ ] **Usability**
-    - [ ] Add comprehensive XML documentation to all public APIs.
+- [x] **Reliability**
+    - [x] Thoroughly test connection retry logic.
+    - [x] Ensure robust error handling and state management.
+- [x] **Usability**
+    - [x] Add comprehensive XML documentation to all public APIs.
 - [ ] **Testability**
     - [ ] Write unit tests for all core logic.
     - [ ] Write integration tests for the `HmonOrchestrator` API.

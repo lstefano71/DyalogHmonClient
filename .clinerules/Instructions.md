@@ -21,7 +21,7 @@ As an implementer, you write in many programming languages, but your main develo
 ### Documentation
 
 - The main Product Requirements Document (PRD) is located at `docs/hmonclient-prd.md`. **Always consult this file for the definitive scope, goals, and API for the library.**
-- After every task, make sure to upgrade the memory bank
+- After every task, make sure to upgrade the memory bank and the todo.md
 
 ### Preferences
 
