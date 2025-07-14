@@ -189,10 +189,13 @@ internal class HmonConnection : IAsyncDisposable
         ReadResult result = await reader.ReadAsync(ct);
         ReadOnlySequence<byte> buffer = result.Buffer;
 
-        while (TryReadMessage(ref buffer, out var message))
+        while (true) // Loop to read all messages in the buffer
         {
+          ReadOnlySequence<byte> message;
           if (_handshakeExpectedPayloads.Count > 0)
           {
+            if (!TryReadMessage(ref buffer, out message, true)) // Pass true for handshake
+              break;
             // Process handshake messages
             var receivedPayload = Encoding.UTF8.GetString(message.ToArray());
             logger.Debug("RECV Handshake Message: {Payload}", receivedPayload);
@@ -211,6 +214,8 @@ internal class HmonConnection : IAsyncDisposable
           }
           else
           {
+            if (!TryReadMessage(ref buffer, out message, false)) // Pass false for normal messages
+              break;
             // Normal message processing
             logger.Debug("RECV Message: {Raw}", Encoding.UTF8.GetString(message.ToArray()));
             await ParseAndDispatchMessageAsync(message);
@@ -235,25 +240,32 @@ internal class HmonConnection : IAsyncDisposable
     }
   }
 
-  private bool TryReadMessage(ref ReadOnlySequence<byte> buffer, out ReadOnlySequence<byte> message)
+  private bool TryReadMessage(ref ReadOnlySequence<byte> buffer, out ReadOnlySequence<byte> message, bool isHandshake)
   {
-    if (buffer.Length < 4)
-    {
-      message = default;
-      return false;
-    }
+    message = default;
+    if (buffer.Length < 4) return false; // Not enough for length prefix
 
     var lengthBytes = buffer.Slice(0, 4).ToArray();
     if (BitConverter.IsLittleEndian) Array.Reverse(lengthBytes);
     var messageLength = BitConverter.ToInt32(lengthBytes, 0);
 
-    if (buffer.Length < messageLength + 4)
+    int headerOffset = 4; // For length prefix
+
+    if (isHandshake)
     {
-      message = default;
-      return false;
+      if (buffer.Length < 8) return false; // Not enough for length + magic
+      var magicBytes = buffer.Slice(4, 4).ToArray();
+      // Validate magic number: 0x48, 0x4D, 0x4F, 0x4E (HMON)
+      if (!(magicBytes[0] == 0x48 && magicBytes[1] == 0x4D && magicBytes[2] == 0x4F && magicBytes[3] == 0x4E))
+      {
+        throw new InvalidOperationException("Invalid handshake magic number encountered.");
+      }
+      headerOffset = 8; // For length + magic
     }
 
-    message = buffer.Slice(4, messageLength);
+    if (buffer.Length < messageLength + headerOffset) return false; // Not enough for full message
+
+    message = buffer.Slice(headerOffset, messageLength - headerOffset); // Adjust slice for magic number
     buffer = buffer.Slice(message.End);
     return true;
   }
