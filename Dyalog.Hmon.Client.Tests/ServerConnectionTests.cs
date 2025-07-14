@@ -1,3 +1,7 @@
+using System.Text.Json;
+using Dyalog.Hmon.Client.Lib;
+using Xunit;
+
 using Dyalog.Hmon.Client.Lib;
 
 using System.Threading.Channels;
