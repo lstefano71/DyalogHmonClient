@@ -113,10 +113,13 @@ internal class HmonConnection : IAsyncDisposable
         var stream = _tcpClient.GetStream();
         var json = JsonSerializer.Serialize(new object[] { command, payload });
         var bytes = Encoding.UTF8.GetBytes(json);
-        var length = BitConverter.GetBytes(bytes.Length);
+        var totalLength = 8 + bytes.Length;
+        var length = BitConverter.GetBytes(totalLength);
         if (BitConverter.IsLittleEndian) Array.Reverse(length);
-
+        byte[] magic = { 0x48, 0x4D, 0x4F, 0x4E }; // "HMON"
+        
         await stream.WriteAsync(length, ct);
+        await stream.WriteAsync(magic, ct);
         await stream.WriteAsync(bytes, ct);
 
         using (ct.Register(() => tcs.TrySetCanceled()))

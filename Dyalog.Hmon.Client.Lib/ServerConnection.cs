@@ -18,6 +18,7 @@ internal class ServerConnection : IAsyncDisposable
     private readonly Guid _sessionId;
     private readonly Func<ClientConnectedEventArgs, Task>? _onClientConnected;
     private readonly Func<ClientDisconnectedEventArgs, Task>? _onClientDisconnected;
+    private readonly Action<HmonConnection>? _registerConnection;
     private readonly CancellationTokenSource _cts = new();
     private HmonConnection? _hmonConnection;
 
@@ -40,7 +41,8 @@ internal class ServerConnection : IAsyncDisposable
         ChannelWriter<HmonEvent> eventWriter,
         Guid sessionId,
         Func<ClientConnectedEventArgs, Task>? onClientConnected,
-        Func<ClientDisconnectedEventArgs, Task>? onClientDisconnected)
+        Func<ClientDisconnectedEventArgs, Task>? onClientDisconnected,
+        Action<HmonConnection>? registerConnection = null)
     {
         _host = host;
         _port = port;
@@ -50,6 +52,7 @@ internal class ServerConnection : IAsyncDisposable
         _sessionId = sessionId;
         _onClientConnected = onClientConnected;
         _onClientDisconnected = onClientDisconnected;
+        _registerConnection = registerConnection;
         _ = ConnectWithRetriesAsync(_cts.Token);
     }
 
@@ -72,16 +75,19 @@ internal class ServerConnection : IAsyncDisposable
                 // Perform handshake with the server before creating HmonConnection
                 await PerformHandshakeAsync(tcpClient.GetStream(), ct);
 
-                // Only after handshake, consider connection established
-                _hmonConnection = new HmonConnection(tcpClient, _sessionId, _eventWriter, async () =>
-                {
-                    logger.Debug("Connection closed for {Host}:{Port} (SessionId={SessionId}), attempting reconnect", _host, _port, _sessionId);
-                    if (_onClientDisconnected != null)
+                    // Only after handshake, consider connection established
+                    _hmonConnection = new HmonConnection(tcpClient, _sessionId, _eventWriter, async () =>
                     {
-                        await _onClientDisconnected.Invoke(new ClientDisconnectedEventArgs(_sessionId, _host, _port, _friendlyName, "Connection closed"));
-                    }
-                    await ConnectWithRetriesAsync(ct); // Reconnect
-                });
+                        logger.Debug("Connection closed for {Host}:{Port} (SessionId={SessionId}), attempting reconnect", _host, _port, _sessionId);
+                        if (_onClientDisconnected != null)
+                        {
+                            await _onClientDisconnected.Invoke(new ClientDisconnectedEventArgs(_sessionId, _host, _port, _friendlyName, "Connection closed"));
+                        }
+                        await ConnectWithRetriesAsync(ct); // Reconnect
+                    });
+                
+                    // Register the connection in the orchestrator
+                    _registerConnection?.Invoke(_hmonConnection);
 
                 if (_onClientConnected != null)
                 {
@@ -123,16 +129,18 @@ internal class ServerConnection : IAsyncDisposable
     // Perform the HMON handshake protocol (2 receive/send pairs)
     private async Task PerformHandshakeAsync(NetworkStream stream, CancellationToken ct)
     {
-        // Step 1: Send SupportedProtocols=2
+        var logger = Log.Logger.ForContext<ServerConnection>();
+        logger.Debug("Handshake: Sending SupportedProtocols=2");
         string supported = "SupportedProtocols=2";
         await SendHandshakeFrameAsync(stream, supported, ct);
-        // Step 2: Receive SupportedProtocols=2
+        logger.Debug("Handshake: Waiting for SupportedProtocols=2 from server");
         await ReceiveHandshakeFrameAsync(stream, ct);
-        // Step 3: Send UsingProtocol=2
+        logger.Debug("Handshake: Sending UsingProtocol=2");
         string usingProto = "UsingProtocol=2";
         await SendHandshakeFrameAsync(stream, usingProto, ct);
-        // Step 4: Receive UsingProtocol=2
+        logger.Debug("Handshake: Waiting for UsingProtocol=2 from server");
         await ReceiveHandshakeFrameAsync(stream, ct);
+        logger.Debug("Handshake: Completed successfully");
     }
 
     private static async Task<string> ReceiveHandshakeFrameAsync(NetworkStream stream, CancellationToken ct)

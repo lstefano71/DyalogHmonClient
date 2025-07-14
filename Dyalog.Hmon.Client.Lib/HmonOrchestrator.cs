@@ -111,9 +111,12 @@ public class HmonOrchestrator : IAsyncDisposable
     public Guid AddServer(string host, int port, string? friendlyName = null)
     {
         var sessionId = Guid.NewGuid();
-        var server = new ServerConnection(host, port, friendlyName, _options, _eventChannel.Writer, sessionId,
+        var server = new ServerConnection(
+            host, port, friendlyName, _options, _eventChannel.Writer, sessionId,
             (args) => ClientConnected?.Invoke(args),
-            (args) => ClientDisconnected?.Invoke(args));
+            (args) => ClientDisconnected?.Invoke(args),
+            (conn) => _connections.TryAdd(sessionId, conn)
+        );
         _servers.TryAdd(sessionId, server);
         return sessionId;
     }
@@ -139,7 +142,10 @@ public class HmonOrchestrator : IAsyncDisposable
     public async Task<FactsResponse> GetFactsAsync(Guid sessionId, IEnumerable<FactType> facts, CancellationToken ct = default)
     {
         if (!_connections.TryGetValue(sessionId, out var conn))
+        {
+            Serilog.Log.Logger.ForContext<HmonOrchestrator>().Error("GetFactsAsync: Session not found for sessionId={SessionId}", sessionId);
             throw new InvalidOperationException("Session not found");
+        }
         var payload = new
         {
             Facts = facts.Select(f => (int)f).ToArray(),
