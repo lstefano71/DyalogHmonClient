@@ -1,0 +1,46 @@
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ]
+    },
+    "github.com/modelcontextprotocol/servers/tree/main/src/git": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-git"
+      ],
+      "autoApprove": [],
+      "disabled": false
+    },
+    "github.com/modelcontextprotocol/servers/tree/main/src/sqlite": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-sqlite",
+        "--db-path",
+        "${workspaceFolder}/db.sqlite"
+      ],
+      "autoApprove": [],
+      "disabled": false
+    },
+    "github.com/zcaceres/fetch-mcp": {
+      "command": "node",
+      "args": [
+        "C:/Users/stf/Documents/Cline/MCP/fetch-mcp/dist/index.js"
+      ],
+      "autoApprove": [],
+      "disabled": false
+    },
+    "github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ],
+      "autoApprove": [],
+      "disabled": false
+    }
+  }
+}

@@ -18,11 +18,10 @@ As an implementer, you write in many programming languages, but your main develo
 - do not communicate using comments in the code. Do so in the text part of your answers
 - when commenting code don't explain the obvious
 
-
 ### Documentation
 
 - The main Product Requirements Document (PRD) is located at `docs/hmonclient-prd.md`. **Always consult this file for the definitive scope, goals, and API for the library.**
-- Keep an up-to-date version of a todo list using the best tools at your disposal
+- After every task, make sure to upgrade the memory bank
 
 ### Preferences
 
