@@ -1,6 +1,6 @@
 # Active Context: Dyalog.Hmon.Client
 
-_Last reviewed: 2025-07-14 16:48 CEST_
+_Last reviewed: 2025-07-14 23:20 CEST_
 
 ## Current Focus
 - HmonOrchestrator interaction API (GetFactsAsync, GetLastKnownStateAsync, PollFactsAsync, StopFactsPollingAsync, BumpFactsAsync, SubscribeAsync, ConnectRideAsync, DisconnectRideAsync) implemented.
@@ -32,4 +32,4 @@ _Last reviewed: 2025-07-14 16:48 CEST_
 - Implement example application.
 - Finalize and review documentation.
 
-_Memory bank fully reviewed and confirmed up to date as of 2025-07-14 16:48 CEST._
+_Memory bank fully reviewed and confirmed up to date as of 2025-07-14 23:20 CEST._
