@@ -13,7 +13,6 @@ namespace Dyalog.Hmon.Client.Lib;
 [JsonSerializable(typeof(MalformedCommandResponse))]
 [JsonSerializable(typeof(InvalidSyntaxResponse))]
 [JsonSerializable(typeof(DisallowedUidResponse))]
-[JsonSerializable(typeof(Fact))] // Added for polymorphic Fact support
 internal partial class HmonJsonContext : JsonSerializerContext
 {
 }

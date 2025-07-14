@@ -47,15 +47,35 @@ namespace Dyalog.Hmon.Client.Lib
   // Payloads
   public record FactsResponse(string? UID, int? Interval, IEnumerable<Fact> Facts);
 
-  [JsonDerivedType(typeof(HostFact), "Host")]
-  [JsonDerivedType(typeof(AccountInformationFact), "AccountInformation")]
-  [JsonDerivedType(typeof(WorkspaceFact), "Workspace")]
-  [JsonDerivedType(typeof(ThreadsFact), "Threads")]
-  [JsonDerivedType(typeof(SuspendedThreadsFact), "SuspendedThreads")]
-  [JsonDerivedType(typeof(ThreadCountFact), "ThreadCount")]
   public abstract record Fact(int ID, string Name)
   {
     public FactType FactType => (FactType)ID;
+  }
+  public class FactJsonConverter : JsonConverter<Fact>
+  {
+    public override Fact? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+      using var doc = JsonDocument.ParseValue(ref reader);
+      var root = doc.RootElement;
+      if (!root.TryGetProperty("Name", out var nameProp))
+        throw new JsonException("Missing 'Name' property for Fact polymorphic deserialization.");
+      var name = nameProp.GetString();
+      return name switch
+      {
+        "Host" => root.Deserialize<HostFact>(options),
+        "AccountInformation" => root.Deserialize<AccountInformationFact>(options),
+        "Workspace" => root.Deserialize<WorkspaceFact>(options),
+        "Threads" => root.Deserialize<ThreadsFact>(options),
+        "SuspendedThreads" => root.Deserialize<SuspendedThreadsFact>(options),
+        "ThreadCount" => root.Deserialize<ThreadCountFact>(options),
+        _ => throw new JsonException($"Unknown Fact type: {name}")
+      };
+    }
+
+    public override void Write(Utf8JsonWriter writer, Fact value, JsonSerializerOptions options)
+    {
+      JsonSerializer.Serialize(writer, (object)value, value.GetType(), options);
+    }
   }
 
   public record HostFact(MachineInfo Machine, InterpreterInfo Interpreter, CommsLayerInfo CommsLayer, RideInfo RIDE) : Fact(1, "Host");
