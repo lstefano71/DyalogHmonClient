@@ -37,7 +37,6 @@ class Program
             var orchestratorTimeout = TimeSpan.FromSeconds(20);
 
             Log.Debug("Subscribing to UntrappedSignal events for session {SessionId}", args.SessionId);
-            Log.Debug("BEFORE SubscribeAsync (fire-and-forget)");
             _ = Task.Run(async () =>
             {
                 try
@@ -45,7 +44,7 @@ class Program
                     var subscribeTask = orchestrator.SubscribeAsync(args.SessionId, [SubscriptionEvent.UntrappedSignal], cancellationToken);
                     if (await Task.WhenAny(subscribeTask, Task.Delay(orchestratorTimeout, cancellationToken)) == subscribeTask)
                     {
-                        Log.Debug("AFTER await SubscribeAsync");
+                        // Log.Debug("AFTER await SubscribeAsync"); // Removed redundant log
                     }
                     else
                     {

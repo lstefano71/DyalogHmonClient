@@ -15,8 +15,7 @@ internal class HmonConnection : IAsyncDisposable
 {
 
     private readonly TcpClient _tcpClient;
-    private static readonly DrptFramer HmonFramer = new DrptFramer("HMON");
-    private readonly DrptFramer _framer = HmonFramer;
+    private static readonly DrptFramer HmonFramer = new("HMON");
 
     // --- Handshake implementation ---
 
@@ -51,8 +50,10 @@ internal class HmonConnection : IAsyncDisposable
     private readonly Guid _sessionId;
     private readonly ChannelWriter<HmonEvent> _eventWriter;
     private readonly Func<Task>? _onDisconnect;
+    private readonly Func<ClientConnectedEventArgs, Task>? _onClientConnected;
     private readonly CancellationTokenSource _cts = new();
     private readonly ConcurrentDictionary<string, TaskCompletionSource<HmonEvent>> _pendingRequests = new();
+    private readonly TaskCompletionSource _pipeReadyTcs = new();
 
     /// <summary>
     /// Initializes a new HmonConnection for the given TCP client and session.
@@ -61,13 +62,41 @@ internal class HmonConnection : IAsyncDisposable
     /// <param name="sessionId">Session identifier.</param>
     /// <param name="eventWriter">Channel writer for events.</param>
     /// <param name="onDisconnect">Optional disconnect callback.</param>
-    public HmonConnection(TcpClient tcpClient, Guid sessionId, ChannelWriter<HmonEvent> eventWriter, Func<Task>? onDisconnect = null)
+    /// <param name="onClientConnected">Optional client connected callback.</param>
+    public HmonConnection(TcpClient tcpClient, Guid sessionId, ChannelWriter<HmonEvent> eventWriter, Func<Task>? onDisconnect = null, Func<ClientConnectedEventArgs, Task>? onClientConnected = null)
     {
         _tcpClient = tcpClient;
         _sessionId = sessionId;
         _eventWriter = eventWriter;
         _onDisconnect = onDisconnect;
-        _ = StartProcessingAsync(_cts.Token);
+        _onClientConnected = onClientConnected;
+    }
+
+    /// <summary>
+    /// Performs the HMON handshake and starts processing messages.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <param name="remoteAddress">Remote IP address for ClientConnected event.</param>
+    /// <param name="remotePort">Remote port for ClientConnected event.</param>
+    public async Task InitializeAsync(CancellationToken ct, string remoteAddress, int remotePort)
+    {
+        var logger = Log.Logger.ForContext<HmonConnection>();
+        try
+        {
+            await PerformHandshakeAsync(ct);
+            _ = StartProcessingAsync(ct); // Start processing messages after handshake
+            await _pipeReadyTcs.Task.WaitAsync(ct); // Wait for pipe to be ready with cancellation
+            if (_onClientConnected != null)
+            {
+                logger.Debug("Firing ClientConnected event from HmonConnection (SessionId={SessionId})", _sessionId);
+                await _onClientConnected.Invoke(new ClientConnectedEventArgs(_sessionId, remoteAddress, remotePort, null));
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.Error(ex, "HmonConnection initialization failed (SessionId={SessionId})", _sessionId);
+            throw; // Re-throw to be handled by orchestrator
+        }
     }
 
     /// <summary>
@@ -93,7 +122,7 @@ internal class HmonConnection : IAsyncDisposable
         var bytes = Encoding.UTF8.GetBytes(json);
 
         Log.Debug("SEND Message: {Json}", json);
-        await _framer.WriteFrameAsync(stream, bytes, ct);
+        await HmonFramer.WriteFrameAsync(stream, bytes, ct);
 
         if (uid != null)
         {
@@ -119,6 +148,9 @@ internal class HmonConnection : IAsyncDisposable
             var pipe = new Pipe();
             Task writing = FillPipeAsync(_tcpClient.GetStream(), pipe.Writer, ct);
             Task reading = ReadPipeAsync(pipe.Reader, ct);
+
+            _pipeReadyTcs.TrySetResult(); // Signal that the pipe is ready
+
             await Task.WhenAll(reading, writing);
         }
         finally

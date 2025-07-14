@@ -55,37 +55,34 @@ public class HmonOrchestrator : IAsyncDisposable
                 var tcpClient = await listener.AcceptTcpClientAsync(ct);
                 var sessionId = Guid.NewGuid();
                 logger.Debug("Accepted new connection (SessionId={SessionId})", sessionId);
-                var connection = new HmonConnection(tcpClient, sessionId, _eventChannel.Writer, async () =>
-                {
-                    logger.Debug("Connection closed (SessionId={SessionId})", sessionId);
-                    _connections.TryRemove(sessionId, out _);
-                    if (ClientDisconnected != null)
+                var remoteEndPoint = (IPEndPoint)tcpClient.Client.RemoteEndPoint!;
+                var connection = new HmonConnection(
+                    tcpClient,
+                    sessionId,
+                    _eventChannel.Writer,
+                    async () =>
                     {
-                        var remoteEndPoint = (IPEndPoint)tcpClient.Client.RemoteEndPoint!;
-                        await ClientDisconnected.Invoke(new ClientDisconnectedEventArgs(sessionId, remoteEndPoint.Address.ToString(), remoteEndPoint.Port, null, "Remote client disconnected"));
-                    }
-                });
+                        logger.Debug("Connection closed (SessionId={SessionId})", sessionId);
+                        _connections.TryRemove(sessionId, out _);
+                        if (ClientDisconnected != null)
+                        {
+                            await ClientDisconnected.Invoke(new ClientDisconnectedEventArgs(sessionId, remoteEndPoint.Address.ToString(), remoteEndPoint.Port, null, "Remote client disconnected"));
+                        }
+                    },
+                    (args) => { if (ClientConnected != null) return ClientConnected.Invoke(args); return Task.CompletedTask; } // Pass the ClientConnected event handler
+                );
                 _connections.TryAdd(sessionId, connection);
 
-                // Perform handshake before invoking ClientConnected
                 try
                 {
-                    await connection.PerformHandshakeAsync(ct);
+                    await connection.InitializeAsync(ct, remoteEndPoint.Address.ToString(), remoteEndPoint.Port);
                 }
                 catch (Exception ex)
                 {
-                    logger.Error(ex, "Handshake failed (SessionId={SessionId}), cleaning up connection", sessionId);
-                    // Handshake failed: clean up and do not fire ClientConnected
+                    logger.Error(ex, "Connection initialization failed (SessionId={SessionId}), cleaning up connection", sessionId);
                     _connections.TryRemove(sessionId, out _);
                     await connection.DisposeAsync();
                     continue;
-                }
-
-                if (ClientConnected != null)
-                {
-                    var remoteEndPoint = (IPEndPoint)tcpClient.Client.RemoteEndPoint!;
-                    logger.Debug("Firing ClientConnected event (SessionId={SessionId})", sessionId);
-                    await ClientConnected.Invoke(new ClientConnectedEventArgs(sessionId, remoteEndPoint.Address.ToString(), remoteEndPoint.Port, null));
                 }
             }
         }
