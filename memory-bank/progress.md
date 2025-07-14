@@ -11,6 +11,8 @@
 - Project setup and structure (solution, library, console, and test projects).
 - Core concepts, configuration, enums, lifecycle event arguments, unified event stream, and message payload models.
 - Connection management, handshake protocol, and event handling.
+- Unit tests for HmonOrchestrator, HmonConnection, and ServerConnection (construction, disposal, error handling).
+- Integration test for end-to-end handshake using MockHmonServer.
 - XML documentation for all public APIs in HmonOrchestrator, ServerConnection, and HmonConnection.
 - Serilog logging for connection lifecycle, handshake failures, and disposal in HmonOrchestrator.
 - Serilog logging for connection attempts, failures, and error diagnostics in ServerConnection and HmonConnection.

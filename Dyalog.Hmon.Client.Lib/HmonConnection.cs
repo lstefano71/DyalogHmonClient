@@ -21,7 +21,6 @@ internal class HmonConnection : IAsyncDisposable
     internal async Task PerformHandshakeAsync(CancellationToken ct)
     {
         var stream = _tcpClient.GetStream();
-        // Handshake sequence: SupportedProtocols=2 (send/recv), UsingProtocol=2 (send/recv)
         await SendHandshakeFrameAsync(stream, "SupportedProtocols=2", ct);
         await ReceiveHandshakeFrameAsync(stream, "SupportedProtocols=2", ct);
         await SendHandshakeFrameAsync(stream, "UsingProtocol=2", ct);

@@ -10,6 +10,8 @@
 - Reviewing and updating all documentation, including README.md.
 
 ## Recent Changes
+- Unit tests implemented for HmonOrchestrator, HmonConnection, and ServerConnection (construction, disposal, error handling).
+- Integration test implemented for end-to-end handshake using MockHmonServer.
 - XML documentation added to all public APIs in HmonOrchestrator, ServerConnection, and HmonConnection.
 - Serilog logging integrated in HmonOrchestrator for connection lifecycle, handshake failures, and disposal.
 - Serilog logging integrated in ServerConnection and HmonConnection for connection attempts, failures, and error diagnostics.

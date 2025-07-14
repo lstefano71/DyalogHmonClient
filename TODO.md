@@ -72,9 +72,9 @@ This document outlines the tasks required to implement the `Dyalog.Hmon.Client` 
     - [x] Ensure robust error handling and state management.
 - [x] **Usability**
     - [x] Add comprehensive XML documentation to all public APIs.
-- [ ] **Testability**
-    - [ ] Write unit tests for all core logic.
-    - [ ] Write integration tests for the `HmonOrchestrator` API.
+- [x] **Testability**
+    - [x] Write unit tests for all core logic.
+    - [x] Write integration tests for the `HmonOrchestrator` API.
 - [ ] **Example Application**
     - [ ] Implement the consumer workflow example in the `Dyalog.Hmon.Client.Console` project.
 - [ ] **Documentation**

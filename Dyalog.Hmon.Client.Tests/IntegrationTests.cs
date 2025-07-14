@@ -1,0 +1,31 @@
+using Xunit;
+using Dyalog.Hmon.Client.Lib;
+using System.Threading.Tasks;
+
+namespace Dyalog.Hmon.Client.Tests;
+
+/// <summary>
+/// Integration tests for end-to-end HMON protocol flows.
+/// </summary>
+public class IntegrationTests
+{
+    [Fact]
+    public async Task Handshake_Succeeds_WithMockServer()
+    {
+        using var mockServer = new MockHmonServer();
+        var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var orchestrator = new HmonOrchestrator();
+
+        // Start accepting in the background
+        var acceptTask = mockServer.AcceptAndHandshakeAsync(cts.Token);
+
+        // Connect orchestrator to mock server
+        var sessionId = orchestrator.AddServer("127.0.0.1", mockServer.Port, "mock");
+
+        // Wait for handshake to complete (should not throw)
+        await acceptTask;
+
+        // Cleanup
+        await orchestrator.DisposeAsync();
+    }
+}

@@ -1,6 +1,7 @@
 using System.Net.Sockets;
 using System.Threading.Channels;
 using Serilog;
+using System.Text;
 
 namespace Dyalog.Hmon.Client.Lib;
 
@@ -68,6 +69,10 @@ internal class ServerConnection : IAsyncDisposable
 
                 logger.Information("Connection established to {Host}:{Port} (SessionId={SessionId})", _host, _port, _sessionId);
 
+                // Perform handshake with the server before creating HmonConnection
+                await PerformHandshakeAsync(tcpClient.GetStream(), ct);
+
+                // Only after handshake, consider connection established
                 _hmonConnection = new HmonConnection(tcpClient, _sessionId, _eventWriter, async () =>
                 {
                     logger.Debug("Connection closed for {Host}:{Port} (SessionId={SessionId}), attempting reconnect", _host, _port, _sessionId);
@@ -82,6 +87,9 @@ internal class ServerConnection : IAsyncDisposable
                 {
                     await _onClientConnected.Invoke(new ClientConnectedEventArgs(_sessionId, _host, _port, _friendlyName));
                 }
+
+                // Wait for the HmonConnection to start processing before returning
+                await Task.Delay(100, ct);
 
                 return; // Connection successful, exit the retry loop.
             }
@@ -111,4 +119,61 @@ internal class ServerConnection : IAsyncDisposable
             await _hmonConnection.DisposeAsync();
         }
     }
+
+    // Perform the HMON handshake protocol (2 receive/send pairs)
+    private async Task PerformHandshakeAsync(NetworkStream stream, CancellationToken ct)
+    {
+        // Step 1: Send SupportedProtocols=2
+        string supported = "SupportedProtocols=2";
+        await SendHandshakeFrameAsync(stream, supported, ct);
+        // Step 2: Receive SupportedProtocols=2
+        await ReceiveHandshakeFrameAsync(stream, ct);
+        // Step 3: Send UsingProtocol=2
+        string usingProto = "UsingProtocol=2";
+        await SendHandshakeFrameAsync(stream, usingProto, ct);
+        // Step 4: Receive UsingProtocol=2
+        await ReceiveHandshakeFrameAsync(stream, ct);
+    }
+
+    private static async Task<string> ReceiveHandshakeFrameAsync(NetworkStream stream, CancellationToken ct)
+    {
+        var lengthBytes = new byte[4];
+        await ReadExactAsync(stream, lengthBytes, ct);
+        if (BitConverter.IsLittleEndian) Array.Reverse(lengthBytes);
+        int totalLength = BitConverter.ToInt32(lengthBytes, 0);
+
+        var magic = new byte[4];
+        await ReadExactAsync(stream, magic, ct);
+        if (!(magic[0] == 0x48 && magic[1] == 0x4D && magic[2] == 0x4F && magic[3] == 0x4E))
+            throw new InvalidOperationException("Invalid handshake magic number");
+
+        int payloadLength = totalLength - 8;
+        var payloadBytes = new byte[payloadLength];
+        await ReadExactAsync(stream, payloadBytes, ct);
+        return Encoding.UTF8.GetString(payloadBytes);
+    }
+
+    private static async Task SendHandshakeFrameAsync(NetworkStream stream, string payload, CancellationToken ct)
+    {
+        var payloadBytes = Encoding.UTF8.GetBytes(payload);
+        var totalLength = 8 + payloadBytes.Length;
+        var lengthBytes = BitConverter.GetBytes(totalLength);
+        if (BitConverter.IsLittleEndian) Array.Reverse(lengthBytes);
+        byte[] magic = { 0x48, 0x4D, 0x4F, 0x4E };
+        await stream.WriteAsync(lengthBytes, ct);
+        await stream.WriteAsync(magic, ct);
+        await stream.WriteAsync(payloadBytes, ct);
+    }
+
+    private static async Task ReadExactAsync(NetworkStream stream, byte[] buffer, CancellationToken ct)
+    {
+        int offset = 0;
+        while (offset < buffer.Length)
+        {
+            int read = await stream.ReadAsync(buffer.AsMemory(offset, buffer.Length - offset), ct);
+            if (read == 0) throw new InvalidOperationException("Unexpected end of stream during handshake");
+            offset += read;
+        }
+    }
 }
+// End of ServerConnection class
