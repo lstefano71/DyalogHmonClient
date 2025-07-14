@@ -1,5 +1,7 @@
 # Product Context: Dyalog.Hmon.Client
 
+_Last reviewed: 2025-07-14 16:48 CEST_
+
 ## Problem Statement
 Developers building monitoring and diagnostic tools for Dyalog APL interpreters face complexity in managing multiple connections, handling protocol details, and ensuring robust, real-time data flow.
 
@@ -15,3 +17,5 @@ Dyalog.Hmon.Client provides a unified, orchestrator-based API that abstracts pro
 - Minimal setup for managing multiple sessions.
 - Strongly-typed, asynchronous event handling.
 - Reliable session tracking and error handling.
+
+_Memory bank fully reviewed and confirmed up to date as of 2025-07-14 16:48 CEST._

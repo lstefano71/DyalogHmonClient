@@ -1,5 +1,7 @@
 # Tech Context: Dyalog.Hmon.Client
 
+_Last reviewed: 2025-07-14 16:48 CEST_
+
 ## Language and Framework
 - **Language:** C# 13
 - **Framework:** .NET 9.0
@@ -20,3 +22,5 @@
 - Preferred logging: Serilog
 - Console/CLI interaction: SpectreConsole
 - Embedded database: SQLite
+
+_Memory bank fully reviewed and confirmed up to date as of 2025-07-14 16:48 CEST._

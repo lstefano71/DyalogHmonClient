@@ -1,5 +1,7 @@
 # System Patterns: Dyalog.Hmon.Client
 
+_Last reviewed: 2025-07-14 16:48 CEST_
+
 ## Architectural Overview
 - **Orchestrator-Centric Design:** The HmonOrchestrator is the central component, managing all HMON connections and exposing a unified event stream.
 - **Reactive Event Model:** All connection lifecycle events and data are delivered via a single IAsyncEnumerable<HmonEvent>, enabling asynchronous, event-driven consumption.
@@ -12,3 +14,5 @@
 - **Unified Event Stream:** Consumers process all events from all sessions in a single loop, simplifying application logic.
 - **Separation of Concerns:** The orchestrator abstracts protocol and connection management, letting consumers focus on business logic.
 - **Extensibility:** The design supports future enhancements and integration with various monitoring tools.
+
+_Memory bank fully reviewed and confirmed up to date as of 2025-07-14 16:48 CEST._

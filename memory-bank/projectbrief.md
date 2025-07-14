@@ -1,5 +1,7 @@
 # Project Brief: Dyalog.Hmon.Client
 
+_Last reviewed: 2025-07-14 16:48 CEST_
+
 ## Vision
 Deliver a high-quality, modern, and robust .NET library for managing communications with Dyalog APL interpreters via the Health Monitor (HMON) protocol. The library will enable the creation of advanced monitoring and diagnostic tools in C#.
 
@@ -18,3 +20,5 @@ Dyalog.Hmon.Client abstracts the complexities of the HMON protocol, connection m
 
 ## Scope
 This project covers the Dyalog.Hmon.Client library only. Client applications (e.g., dashboards, CLI tools) are out of scope.
+
+_Memory bank fully reviewed and confirmed up to date as of 2025-07-14 16:48 CEST._

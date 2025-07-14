@@ -67,6 +67,53 @@ public class MockHmonServer : IDisposable
             throw lastException;
     }
 
+    /// <summary>
+    /// Accepts a connection and simulates a handshake failure by sending an invalid handshake frame.
+    /// </summary>
+    public async Task AcceptAndFailHandshakeAsync(CancellationToken ct = default)
+    {
+        var acceptStart = DateTime.UtcNow;
+        var acceptTimeout = TimeSpan.FromSeconds(5);
+        while (!ct.IsCancellationRequested)
+        {
+            if (DateTime.UtcNow - acceptStart > acceptTimeout)
+                throw new TimeoutException("Timed out waiting for client connection in MockHmonServer.");
+            Console.WriteLine("MockHmonServer: Waiting for client connection (fail handshake)...");
+            try
+            {
+                _client = await _listener.AcceptTcpClientAsync(ct);
+                _stream = _client.GetStream();
+
+                // Send an invalid handshake frame (wrong magic number)
+                var payloadBytes = Encoding.UTF8.GetBytes("InvalidHandshake");
+                var totalLength = 8 + payloadBytes.Length;
+                var lengthBytes = BitConverter.GetBytes(totalLength);
+                if (BitConverter.IsLittleEndian) Array.Reverse(lengthBytes);
+                byte[] invalidMagic = { 0x00, 0x00, 0x00, 0x00 };
+                await _stream.WriteAsync(lengthBytes, ct);
+                await _stream.WriteAsync(invalidMagic, ct);
+                await _stream.WriteAsync(payloadBytes, ct);
+
+                // Close connection immediately
+                _stream.Dispose();
+                _client.Dispose();
+                _stream = null;
+                _client = null;
+                Console.WriteLine("MockHmonServer: Sent invalid handshake and closed connection.");
+                return;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"MockHmonServer: Exception in AcceptAndFailHandshakeAsync: {ex.Message}");
+                _stream?.Dispose();
+                _client?.Dispose();
+                _stream = null;
+                _client = null;
+                await Task.Delay(200, ct);
+            }
+        }
+    }
+
     private static async Task SendHandshakeFrameAsync(NetworkStream stream, string payload, CancellationToken ct)
     {
         var payloadBytes = Encoding.UTF8.GetBytes(payload);

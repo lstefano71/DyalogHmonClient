@@ -28,4 +28,29 @@ public class IntegrationTests
         // Cleanup
         await orchestrator.DisposeAsync();
     }
+
+    [Fact]
+    public async Task Handshake_Fails_WithInvalidHandshake()
+    {
+        using var mockServer = new MockHmonServer();
+        var cts = new System.Threading.CancellationTokenSource(System.TimeSpan.FromSeconds(5));
+        var orchestrator = new HmonOrchestrator();
+
+        // Start failing handshake in the background
+        var failTask = mockServer.AcceptAndFailHandshakeAsync(cts.Token);
+
+        // Connect orchestrator to mock server
+        var sessionId = orchestrator.AddServer("127.0.0.1", mockServer.Port, "mock");
+
+        // Wait for the server to process the failed handshake
+        await failTask;
+
+        // The orchestrator should not expose the failed session
+        await Assert.ThrowsAsync<System.InvalidOperationException>(async () =>
+        {
+            await orchestrator.GetFactsAsync(sessionId, Array.Empty<Dyalog.Hmon.Client.Lib.FactType>(), default);
+        });
+
+        await orchestrator.DisposeAsync();
+    }
 }
