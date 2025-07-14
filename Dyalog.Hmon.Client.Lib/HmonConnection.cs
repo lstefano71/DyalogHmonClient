@@ -55,8 +55,7 @@ internal class HmonConnection : IAsyncDisposable
   public async Task InitializeAsync(CancellationToken ct, string remoteAddress, int remotePort, string? friendlyName = null)
   {
     var logger = Log.Logger.ForContext<HmonConnection>();
-    try
-    {
+    try {
       logger.Debug("Initializing HmonConnection (SessionId={SessionId})", _sessionId);
 
       // Send initial handshake messages
@@ -73,14 +72,11 @@ internal class HmonConnection : IAsyncDisposable
       _ = StartProcessingAsync(ct); // Start processing messages, including handshake responses
       await _pipeReadyTcs.Task; // Wait for pipe to be ready (handshake completed)
 
-      if (_onClientConnected != null)
-      {
+      if (_onClientConnected != null) {
         logger.Debug("Firing ClientConnected event from HmonConnection (SessionId={SessionId})", _sessionId);
         await _onClientConnected.Invoke(new ClientConnectedEventArgs(_sessionId, remoteAddress, remotePort, friendlyName));
       }
-    }
-    catch (Exception ex)
-    {
+    } catch (Exception ex) {
       logger.Error(ex, "HmonConnection initialization failed (SessionId={SessionId})", _sessionId);
       throw;
     }
@@ -97,8 +93,7 @@ internal class HmonConnection : IAsyncDisposable
   {
     string? uid = null;
     object actualPayload = payload;
-    if (payload is IUidPayload uidPayload)
-    {
+    if (payload is IUidPayload uidPayload) {
       uid = Guid.NewGuid().ToString();
       uidPayload.UID = uid;
       actualPayload = payload;
@@ -111,18 +106,14 @@ internal class HmonConnection : IAsyncDisposable
     Log.Debug("SEND Message: {Json}", json);
     await HmonFramer.WriteFrameAsync(stream, bytes, ct);
 
-    if (uid != null)
-    {
+    if (uid != null) {
       var tcs = new TaskCompletionSource<HmonEvent>();
       _pendingRequests.TryAdd(uid, tcs);
-      using (ct.Register(() => tcs.TrySetCanceled()))
-      {
+      using (ct.Register(() => tcs.TrySetCanceled())) {
         var result = await tcs.Task;
         return (T)result;
       }
-    }
-    else
-    {
+    } else {
       // No UID, fire-and-forget, return default
       return default!;
     }
@@ -130,8 +121,7 @@ internal class HmonConnection : IAsyncDisposable
 
   private async Task StartProcessingAsync(CancellationToken ct)
   {
-    try
-    {
+    try {
       var pipe = new Pipe();
       Task writing = FillPipeAsync(_tcpClient.GetStream(), pipe.Writer, ct);
       Task reading = ReadPipeAsync(pipe.Reader, ct);
@@ -139,11 +129,8 @@ internal class HmonConnection : IAsyncDisposable
       // _pipeReadyTcs.TrySetResult(); // Signal that the pipe is ready - now done after handshake
 
       await Task.WhenAll(reading, writing);
-    }
-    finally
-    {
-      if (_onDisconnect != null)
-      {
+    } finally {
+      if (_onDisconnect != null) {
         await _onDisconnect.Invoke();
       }
     }
@@ -153,22 +140,16 @@ internal class HmonConnection : IAsyncDisposable
   {
     const int minimumBufferSize = 512;
     var logger = Log.Logger.ForContext<HmonConnection>();
-    while (!ct.IsCancellationRequested)
-    {
+    while (!ct.IsCancellationRequested) {
       Memory<byte> memory = writer.GetMemory(minimumBufferSize);
-      try
-      {
+      try {
         int bytesRead = await stream.ReadAsync(memory, ct);
         if (bytesRead == 0) break;
         writer.Advance(bytesRead);
-      }
-      catch (OperationCanceledException)
-      {
+      } catch (OperationCanceledException) {
         logger.Debug("FillPipeAsync canceled for session {SessionId}", _sessionId);
         break;
-      }
-      catch (Exception ex)
-      {
+      } catch (Exception ex) {
         logger.Error(ex, "Exception in FillPipeAsync for session {SessionId}", _sessionId);
         break;
       }
@@ -182,18 +163,15 @@ internal class HmonConnection : IAsyncDisposable
   private async Task ReadPipeAsync(PipeReader reader, CancellationToken ct)
   {
     var logger = Log.Logger.ForContext<HmonConnection>();
-    try
-    {
-      while (!ct.IsCancellationRequested)
-      {
+    try {
+      while (!ct.IsCancellationRequested) {
         ReadResult result = await reader.ReadAsync(ct);
         ReadOnlySequence<byte> buffer = result.Buffer;
 
         while (true) // Loop to read all messages in the buffer
         {
           ReadOnlySequence<byte> message;
-          if (_handshakeExpectedPayloads.Count > 0)
-          {
+          if (_handshakeExpectedPayloads.Count > 0) {
             if (!TryReadMessage(ref buffer, out message, true)) // Pass true for handshake
               break;
             // Process handshake messages
@@ -201,19 +179,15 @@ internal class HmonConnection : IAsyncDisposable
             logger.Debug("RECV Handshake Message: {Payload}", receivedPayload);
 
             var expectedPayload = _handshakeExpectedPayloads.Dequeue();
-            if (receivedPayload != expectedPayload)
-            {
+            if (receivedPayload != expectedPayload) {
               throw new InvalidOperationException($"Handshake payload mismatch. Expected '{expectedPayload}', got '{receivedPayload}'");
             }
 
-            if (_handshakeExpectedPayloads.Count == 0)
-            {
+            if (_handshakeExpectedPayloads.Count == 0) {
               _pipeReadyTcs.TrySetResult(true); // Handshake completed, signal pipe is ready
               logger.Debug("Handshake completed for session {SessionId}", _sessionId);
             }
-          }
-          else
-          {
+          } else {
             if (!TryReadMessage(ref buffer, out message, false)) // Pass false for normal messages
               break;
             // Normal message processing
@@ -225,17 +199,11 @@ internal class HmonConnection : IAsyncDisposable
         reader.AdvanceTo(buffer.Start, buffer.End);
         if (result.IsCompleted) break;
       }
-    }
-    catch (OperationCanceledException)
-    {
+    } catch (OperationCanceledException) {
       logger.Debug("ReadPipeAsync canceled for session {SessionId}", _sessionId);
-    }
-    catch (Exception ex)
-    {
+    } catch (Exception ex) {
       logger.Error(ex, "Exception in ReadPipeAsync for session {SessionId}", _sessionId);
-    }
-    finally
-    {
+    } finally {
       await reader.CompleteAsync();
     }
   }
@@ -251,13 +219,11 @@ internal class HmonConnection : IAsyncDisposable
 
     int headerOffset = 4; // For length prefix
 
-    if (isHandshake)
-    {
+    if (isHandshake) {
       if (buffer.Length < 8) return false; // Not enough for length + magic
       var magicBytes = buffer.Slice(4, 4).ToArray();
       // Validate magic number: 0x48, 0x4D, 0x4F, 0x4E (HMON)
-      if (!(magicBytes[0] == 0x48 && magicBytes[1] == 0x4D && magicBytes[2] == 0x4F && magicBytes[3] == 0x4E))
-      {
+      if (!(magicBytes[0] == 0x48 && magicBytes[1] == 0x4D && magicBytes[2] == 0x4F && magicBytes[3] == 0x4E)) {
         throw new InvalidOperationException("Invalid handshake magic number encountered.");
       }
       headerOffset = 8; // For length + magic
@@ -284,8 +250,7 @@ internal class HmonConnection : IAsyncDisposable
     if (!reader.Read())
       return;
 
-    HmonEvent? hmonEvent = command switch
-    {
+    HmonEvent? hmonEvent = command switch {
       "Facts" => new FactsReceivedEvent(_sessionId, JsonSerializer.Deserialize<FactsResponse>(ref reader, HmonJsonContext.Default.FactsResponse)!),
       "Notification" => new NotificationReceivedEvent(_sessionId, JsonSerializer.Deserialize<NotificationResponse>(ref reader, HmonJsonContext.Default.NotificationResponse)!),
       "LastKnownState" => new LastKnownStateReceivedEvent(_sessionId, JsonSerializer.Deserialize<LastKnownStateResponse>(ref reader, HmonJsonContext.Default.LastKnownStateResponse)!),
@@ -299,15 +264,11 @@ internal class HmonConnection : IAsyncDisposable
       _ => null
     };
 
-    if (hmonEvent != null)
-    {
+    if (hmonEvent != null) {
       var uid = GetUid(hmonEvent);
-      if (uid != null && _pendingRequests.TryRemove(uid, out var tcs))
-      {
+      if (uid != null && _pendingRequests.TryRemove(uid, out var tcs)) {
         tcs.TrySetResult(hmonEvent);
-      }
-      else
-      {
+      } else {
         await _eventWriter.WriteAsync(hmonEvent);
       }
     }
@@ -315,8 +276,7 @@ internal class HmonConnection : IAsyncDisposable
 
   private string? GetUid(HmonEvent hmonEvent)
   {
-    return hmonEvent switch
-    {
+    return hmonEvent switch {
       FactsReceivedEvent e => e.Facts.UID,
       NotificationReceivedEvent e => e.Notification.UID,
       LastKnownStateReceivedEvent e => e.State.UID,

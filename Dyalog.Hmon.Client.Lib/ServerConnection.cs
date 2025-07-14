@@ -1,7 +1,6 @@
 using Serilog;
 
 using System.Net.Sockets;
-using System.Text;
 using System.Threading.Channels;
 
 namespace Dyalog.Hmon.Client.Lib;
@@ -117,5 +116,5 @@ internal class ServerConnection : IAsyncDisposable
     }
   }
 
-  }
+}
 // End of ServerConnection class

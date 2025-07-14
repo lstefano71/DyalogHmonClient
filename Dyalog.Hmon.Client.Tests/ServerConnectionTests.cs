@@ -1,6 +1,8 @@
-using Xunit;
 using Dyalog.Hmon.Client.Lib;
+
 using System.Threading.Channels;
+
+using Xunit;
 
 namespace Dyalog.Hmon.Client.Tests;
 
@@ -9,13 +11,13 @@ namespace Dyalog.Hmon.Client.Tests;
 /// </summary>
 public class ServerConnectionTests
 {
-    [Fact]
-    public async Task CanConstructAndDisposeServerConnection()
-    {
-        var options = new HmonOrchestratorOptions();
-        var writer = Channel.CreateUnbounded<HmonEvent>().Writer;
-        var sessionId = System.Guid.NewGuid();
-        var server = new ServerConnection("localhost", 12345, "test", options, writer, sessionId, null, null);
-        await server.DisposeAsync();
-    }
+  [Fact]
+  public async Task CanConstructAndDisposeServerConnection()
+  {
+    var options = new HmonOrchestratorOptions();
+    var writer = Channel.CreateUnbounded<HmonEvent>().Writer;
+    var sessionId = System.Guid.NewGuid();
+    var server = new ServerConnection("localhost", 12345, "test", options, writer, sessionId, null, null);
+    await server.DisposeAsync();
+  }
 }
