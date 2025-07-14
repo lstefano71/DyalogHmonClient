@@ -5,12 +5,12 @@ namespace Dyalog.Hmon.Client.Lib;
 /// </summary>
 public enum FactType
 {
-    Host,
-    AccountInformation,
-    Workspace,
-    Threads,
-    SuspendedThreads,
-    ThreadCount
+    Host = 1,
+    AccountInformation = 2,
+    Workspace = 3,
+    Threads = 4,
+    SuspendedThreads = 5,
+    ThreadCount = 6
 }
 
 /// <summary>
@@ -18,10 +18,10 @@ public enum FactType
 /// </summary>
 public enum SubscriptionEvent
 {
-    WorkspaceCompaction,
-    WorkspaceResize,
-    UntrappedSignal,
-    TrappedSignal,
-    ThreadSwitch,
-    All
+    WorkspaceCompaction = 1,
+    WorkspaceResize = 2,
+    UntrappedSignal = 3,
+    TrappedSignal = 4,
+    ThreadSwitch = 5,
+    All = 6
 }

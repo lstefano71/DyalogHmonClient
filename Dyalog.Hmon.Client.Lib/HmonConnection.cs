@@ -37,6 +37,8 @@ internal class HmonConnection : IAsyncDisposable
         // Magic number for HMON: 0x48 0x4D 0x4F 0x4E ("HMON")
         byte[] magic = { 0x48, 0x4D, 0x4F, 0x4E };
 
+        Log.Debug("SEND HandshakeFrame: {Payload}", payload);
+
         await stream.WriteAsync(lengthBytes, ct);
         await stream.WriteAsync(magic, ct);
         await stream.WriteAsync(payloadBytes, ct);
@@ -117,6 +119,8 @@ internal class HmonConnection : IAsyncDisposable
         var length = BitConverter.GetBytes(totalLength);
         if (BitConverter.IsLittleEndian) Array.Reverse(length);
         byte[] magic = { 0x48, 0x4D, 0x4F, 0x4E }; // "HMON"
+
+        Log.Debug("SEND Message: {Json}", json);
         
         await stream.WriteAsync(length, ct);
         await stream.WriteAsync(magic, ct);
@@ -186,6 +190,8 @@ internal class HmonConnection : IAsyncDisposable
 
             while (TryReadMessage(ref buffer, out var message))
             {
+                // Log the raw incoming message bytes as UTF8 string
+                Log.Debug("RECV Message: {Raw}", Encoding.UTF8.GetString(message.ToArray()));
                 await ParseAndDispatchMessageAsync(message);
             }
 

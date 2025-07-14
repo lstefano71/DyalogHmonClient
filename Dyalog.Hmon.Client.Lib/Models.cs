@@ -42,7 +42,10 @@ public record FactsResponse(string? UID, int? Interval, IEnumerable<Fact> Facts)
 [JsonDerivedType(typeof(ThreadsFact), "Threads")]
 [JsonDerivedType(typeof(SuspendedThreadsFact), "SuspendedThreads")]
 [JsonDerivedType(typeof(ThreadCountFact), "ThreadCount")]
-public abstract record Fact(int ID, string Name);
+public abstract record Fact(int ID, string Name)
+{
+    public FactType FactType => (FactType)ID;
+}
 
 public record HostFact(MachineInfo Machine, InterpreterInfo Interpreter, CommsLayerInfo CommsLayer, RideInfo RIDE) : Fact(1, "Host");
 public record MachineInfo(string Name, string User, int PID, object Desc, int AccessLevel);
@@ -68,7 +71,10 @@ public record LocationInfo(string Function, int Line, string TS);
 public record WsFullInfo(string TS);
 
 public record SubscribedResponse(string? UID, IEnumerable<SubscriptionStatus> Events);
-public record SubscriptionStatus(int ID, string Name, int Value);
+public record SubscriptionStatus(int ID, string Name, int Value)
+{
+    public SubscriptionEvent EventEnum => (SubscriptionEvent)ID;
+}
 
 public record RideConnectionResponse(string? UID, bool Restricted, bool? Connect, int? Status);
 
