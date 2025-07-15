@@ -20,6 +20,9 @@ class SessionFacts
 
 class Program
 {
+  // Track carousel step across refreshes
+  static int _carouselStep = 0;
+
   static async Task RunMonitoringService(CancellationToken cancellationToken)
   {
     AnsiConsole.MarkupLine("[bold green]Starting Dyalog.Hmon.Client monitoring service...[/]");
@@ -155,10 +158,14 @@ class Program
         } else {
           sessionIdCell = new Text(sessionId.ToString());
         }
-        // Render facts as nested tables by category (excluding HostFact)
-        IRenderable factCell = facts.TryGetValue(sessionId, out sessionFacts)
-            ? RenderFactsTable(sessionFacts)
-            : new Text("");
+        // Render only one fact table at a time, carousel style, using local modulo
+        IRenderable factCell;
+        if (facts.TryGetValue(sessionId, out sessionFacts)) {
+          factCell = RenderFactsTableCarousel(sessionFacts, _carouselStep);
+        } else {
+          factCell = new Text("");
+        }
+
         var subStr = subscriptions.TryGetValue(sessionId, out var subs)
             ? string.Join(", ", subs)
             : (recentEvents.TryGetValue(sessionId, out var recentEvList) && recentEvList.Any(e => e == "UntrappedSignal") ? "UntrappedSignal" : "");
@@ -169,7 +176,8 @@ class Program
       }
 
       ctx.UpdateTarget(table);
-      await Task.Delay(500, cancellationToken);
+      _carouselStep++; // Just increment, let each session use modulo of its own available facts
+      await Task.Delay(1000, cancellationToken); // 1 second interval
     }
   } catch (TaskCanceledException) {
     // Graceful exit on cancellation
@@ -330,5 +338,27 @@ class Program
     } catch (OperationCanceledException) {
       // Graceful shutdown
     }
+  }
+
+  // Helper to render only one fact table at a time, carousel style
+  static IRenderable RenderFactsTableCarousel(SessionFacts facts, int step)
+  {
+    // Order: Workspace, ThreadCount, Threads, SuspendedThreads, AccountInformation
+    var tables = new List<IRenderable>();
+    if (facts.Workspace is not null)
+      tables.Add(RenderWorkspaceFactTable(facts.Workspace));
+    if (facts.ThreadCount is not null)
+      tables.Add(RenderThreadCountFactTable(facts.ThreadCount));
+    if (facts.Threads is not null)
+      tables.Add(RenderThreadsFactTable(facts.Threads));
+    if (facts.SuspendedThreads is not null)
+      tables.Add(RenderSuspendedThreadsFactTable(facts.SuspendedThreads));
+    if (facts.AccountInformation is not null)
+      tables.Add(RenderAccountInformationFactTable(facts.AccountInformation));
+    if (tables.Count == 0)
+      return new Text("");
+    // Carousel: show one table at a time, using local modulo
+    var idx = step % tables.Count;
+    return tables[idx];
   }
 }
