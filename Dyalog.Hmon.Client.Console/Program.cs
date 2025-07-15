@@ -74,7 +74,7 @@ class Program
       return Task.CompletedTask;
     };
 
-    var listener = orchestrator.StartListenerAsync("0.0.0.0", 8080, cancellationToken).ContinueWith(t => {
+    var listener = orchestrator.StartListenerAsync("0.0.0.0", 4501, cancellationToken).ContinueWith(t => {
       if (t.IsFaulted) {
         AnsiConsole.MarkupLine("[bold red]Failed to start listener:[/] " + t.Exception?.GetBaseException().Message);
       } else {
@@ -118,7 +118,7 @@ class Program
 
           ctx.UpdateTarget(table);
           _carouselStep++;
-          await Task.Delay(1000, cancellationToken);
+          await Task.Delay(5000, cancellationToken);
         }
       } catch (TaskCanceledException) {
         // Graceful exit on cancellation
