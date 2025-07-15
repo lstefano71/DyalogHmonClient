@@ -125,8 +125,7 @@ internal class HmonConnection : IAsyncDisposable
 
       // Main message loop
       while (!ct.IsCancellationRequested) {
-        var message = await _hmonFramer.ReadNextMessageAsync(ct);
-        await ParseAndDispatchMessageAsync(message);
+        var message = await _hmonFramer.ReadNextMessageAsync(ParseAndDispatchMessageAsync, ct);        
       }
     } catch (OperationCanceledException) {
       _logger.Debug("StartProcessingAsync canceled for session {SessionId}", _sessionId);
@@ -139,7 +138,7 @@ internal class HmonConnection : IAsyncDisposable
     }
   }
 
-  private async Task ParseAndDispatchMessageAsync(byte[] message)
+  private async Task ParseAndDispatchMessageAsync(ReadOnlySequence<byte> message)
   {
     var reader = new Utf8JsonReader(message);
     if (!reader.Read() || reader.TokenType != JsonTokenType.StartArray)
