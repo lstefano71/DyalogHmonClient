@@ -1,7 +1,5 @@
 using Dyalog.Hmon.Client.Lib;
-
-using Serilog;// Marker interface for payloads that support UID correlation
-
+using Serilog;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.IO.Pipelines;
@@ -9,15 +7,15 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
+using System.Threading;
+using System.Threading.Tasks;
 
 /// <summary>
-/// Represents a single HMON protocol connection, handling framing, handshake, and event dispatch.
+/// Represents a single HMON protocol connection, handling only HMON-specific parsing and dispatch.
 /// </summary>
 internal class HmonConnection : IAsyncDisposable
 {
-  private const string _supportedprotocol = "SupportedProtocols=2";
-  private const string _usingprotocol = "UsingProtocol=2";
-  private static readonly DrptFramer HmonFramer = new("HMON");
+  private readonly DrptFramer _hmonFramer;
 
   private readonly ILogger _logger;
   private readonly TcpClient _tcpClient;
@@ -46,6 +44,7 @@ internal class HmonConnection : IAsyncDisposable
     _eventWriter = eventWriter;
     _onDisconnect = onDisconnect;
     _onClientConnected = onClientConnected;
+    _hmonFramer = new DrptFramer("HMON", _tcpClient.GetStream());
   }
 
   /// <summary>
@@ -96,7 +95,7 @@ internal class HmonConnection : IAsyncDisposable
     var bytes = Encoding.UTF8.GetBytes(json);
 
     _logger.Debug("SEND Message: {Json}", json);
-    await HmonFramer.WriteFrameAsync(stream, bytes, ct);
+    await _hmonFramer.WriteFrameAsync(bytes, ct);
 
     if (uid != null) {
       var tcs = new TaskCompletionSource<HmonEvent>();
@@ -114,9 +113,25 @@ internal class HmonConnection : IAsyncDisposable
   private async Task StartProcessingAsync(CancellationToken ct)
   {
     try {
-      var pipe = new Pipe();
-      Task reading = ReadPipeAsync(PipeReader.Create(_tcpClient.GetStream()), ct);
-      await reading;
+      var pipeReader = PipeReader.Create(_tcpClient.GetStream());
+      // Perform handshake using DrptFramer
+      bool handshakeOk = await _hmonFramer.PerformHandshakeAsync(ct);
+      if (!handshakeOk) {
+        throw new Exception($"Handshake failed for session: {_sessionId}.");
+      }
+
+      _pipeReadyTcs.TrySetResult(true);
+      _logger.Debug("Handshake completed for session {SessionId}", _sessionId);
+
+      // Main message loop
+      while (!ct.IsCancellationRequested) {
+        var message = await _hmonFramer.ReadNextMessageAsync(ct);
+        await ParseAndDispatchMessageAsync(message);
+      }
+    } catch (OperationCanceledException) {
+      _logger.Debug("StartProcessingAsync canceled for session {SessionId}", _sessionId);
+    } catch (Exception ex) {
+      _logger.Error(ex, "Exception in StartProcessingAsync for session {SessionId}", _sessionId);
     } finally {
       if (_onDisconnect != null) {
         await _onDisconnect.Invoke();
@@ -124,114 +139,7 @@ internal class HmonConnection : IAsyncDisposable
     }
   }
 
-  private async Task ReadPipeAsync(PipeReader reader, CancellationToken ct)
-  {
-    var logger = Log.Logger.ForContext<HmonConnection>();
-    try {
-      // Handshake
-      if (!await ProcessHandshakeAsync(reader, ct)) {
-        throw new Exception($"Handshake failed for session: {_sessionId}.");
-      }
-
-      _pipeReadyTcs.TrySetResult(true); // Signal that the pipe is ready after handshake
-      _logger.Debug("Handshake completed for session {SessionId}", _sessionId);
-
-      while (!ct.IsCancellationRequested) {
-        ReadResult result = await reader.ReadAsync(ct);
-        ReadOnlySequence<byte> buffer = result.Buffer;
-
-        while (true) // Loop to read all messages in the buffer
-        {
-          if (!TryReadMessage(ref buffer, out ReadOnlySequence<byte> message))
-            break;
-          // Normal message processing
-          await ParseAndDispatchMessageAsync(message);
-        }
-
-        reader.AdvanceTo(buffer.Start, buffer.End);
-        if (result.IsCompleted) break;
-      }
-    } catch (OperationCanceledException) {
-      _logger.Debug("ReadPipeAsync canceled for session {SessionId}", _sessionId);
-    } catch (Exception ex) {
-      logger.Error(ex, "Exception in ReadPipeAsync for session {SessionId}", _sessionId);
-    } finally {
-      await reader.CompleteAsync();
-    }
-  }
-
-  private async Task<bool> ProcessHandshakeAsync(PipeReader reader, CancellationToken ct)
-  {
-    var stream = _tcpClient.GetStream();
-    await HmonFramer.WriteFrameAsync(stream, _supportedprotocol, ct);
-    var msg = await ReadMessageAsStringAsync(reader, ct);
-    if (msg != _supportedprotocol) {
-      _logger.Error("Handshake failed: expected '{supportedprotocol}', got '{Message}'", _supportedprotocol, msg);
-      return false; // Handshake failed
-    }
-    await HmonFramer.WriteFrameAsync(stream, _usingprotocol, ct);
-    msg = await ReadMessageAsStringAsync(reader, ct);
-    if (msg != _usingprotocol) {
-      _logger.Error("Handshake failed: expected '{usingprotocol}', got '{Message}'", _usingprotocol, msg);
-      return false; // Handshake failed
-    }
-    return true; // Handshake successful
-  }
-
-  private async Task<string> ReadMessageAsStringAsync(PipeReader reader, CancellationToken ct)
-  {
-    try {
-      while (true) {
-        ReadResult result = await reader.ReadAsync(ct);
-        ReadOnlySequence<byte> buffer = result.Buffer;
-        if (TryReadMessage(ref buffer, out var message)) {
-          var messageBytes = Encoding.UTF8.GetString(message.ToArray());
-          reader.AdvanceTo(buffer.Start);
-          return messageBytes;
-        }
-        if (result.IsCompleted && buffer.IsEmpty) {
-          throw new EndOfStreamException("No more data available in the stream.");
-        }
-      }
-    } catch (OperationCanceledException) {
-      _logger.Debug("ReadMessageAsStringAsync canceled for session {SessionId}", _sessionId);
-      throw;
-    } catch (Exception ex) {
-      _logger.Error(ex, "Error reading message as string for session {SessionId}", _sessionId);
-      throw;
-    }
-  }
-
-  private bool TryReadMessage(ref ReadOnlySequence<byte> buffer, out ReadOnlySequence<byte> message)
-  {
-    message = default;
-    if (buffer.Length < 4) return false; // Not enough for length prefix
-
-    var lengthBytes = buffer.Slice(0, 4).ToArray();
-    if (BitConverter.IsLittleEndian) Array.Reverse(lengthBytes);
-    var messageLength = BitConverter.ToInt32(lengthBytes, 0);
-
-    int headerOffset = 4; // For length prefix
-
-    if (buffer.Length < 8) return false; // Not enough for length + magic
-    var magicBytes = buffer.Slice(4, 4).ToArray();
-    // Validate magic number using the framer's magic
-    if (!magicBytes.AsSpan().SequenceEqual(HmonFramer.Magic)) {
-      throw new InvalidOperationException($"Invalid handshake magic number encountered. Expected '{Encoding.ASCII.GetString(HmonFramer.Magic)}', got '{Encoding.ASCII.GetString(magicBytes)}'");
-    }
-    headerOffset = 8; // For length + magic
-
-    // FIX: Only require messageLength bytes (total frame size) in buffer
-    if (buffer.Length < messageLength) return false; // Not enough for full message
-
-    message = buffer.Slice(headerOffset, messageLength - headerOffset); // Adjust slice for magic number
-    buffer = buffer.Slice(message.End);
-
-    _logger.Debug("{direction} Message: {Raw}", "RECV", Encoding.UTF8.GetString(message.ToArray()));
-    return true;
-  }
-
-  private async Task ParseAndDispatchMessageAsync(ReadOnlySequence<byte> message)
+  private async Task ParseAndDispatchMessageAsync(byte[] message)
   {
     var reader = new Utf8JsonReader(message);
     if (!reader.Read() || reader.TokenType != JsonTokenType.StartArray)
