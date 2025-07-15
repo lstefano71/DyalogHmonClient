@@ -1,6 +1,5 @@
 using Serilog;
 
-using System.Net.Sockets;
 using System.Text;
 
 namespace Dyalog.Hmon.Client.Lib
@@ -26,7 +25,7 @@ namespace Dyalog.Hmon.Client.Lib
     {
       var payload = Encoding.UTF8.GetBytes(text);
       await WriteFrameAsync(stream, payload, ct);
-      _logger.Debug("{direction} Message: {Raw}", "SENT", text); 
+      _logger.Debug("{direction} Message: {Raw}", "SENT", text);
     }
 
     public async Task WriteFrameAsync(Stream stream, byte[] payload, CancellationToken ct)

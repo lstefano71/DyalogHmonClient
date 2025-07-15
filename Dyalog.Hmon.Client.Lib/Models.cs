@@ -60,8 +60,35 @@ namespace Dyalog.Hmon.Client.Lib
       if (!root.TryGetProperty("Name", out var nameProp))
         throw new JsonException("Missing 'Name' property for Fact polymorphic deserialization.");
       var name = nameProp.GetString();
-      return name switch
-      {
+      var id = root.GetProperty("ID").GetInt32();
+      // For facts with a 'Value' property, use it for deserialization
+      if (root.TryGetProperty("Value", out var valueProp)) {
+        switch (name) {
+          case "Workspace":
+            var ws = valueProp.Deserialize<WorkspaceFact>(options);
+            // WorkspaceFact's record constructor sets ID/Name, but we want to preserve the protocol's ID/Name
+            return ws with { ID = id, Name = name };
+          case "ThreadCount":
+            var tc = valueProp.Deserialize<ThreadCountFact>(options);
+            return tc with { ID = id, Name = name };
+          case "Threads":
+            var threads = valueProp.Deserialize<ThreadsFact>(options);
+            return threads with { ID = id, Name = name };
+          case "SuspendedThreads":
+            var sthreads = valueProp.Deserialize<SuspendedThreadsFact>(options);
+            return sthreads with { ID = id, Name = name };
+          case "AccountInformation":
+            var acc = valueProp.Deserialize<AccountInformationFact>(options);
+            return acc with { ID = id, Name = name };
+          case "Host":
+            var host = valueProp.Deserialize<HostFact>(options);
+            return host with { ID = id, Name = name };
+          default:
+            throw new JsonException($"Unknown Fact type: {name}");
+        }
+      }
+      // Fallback: try to deserialize the whole object (legacy or non-Value facts)
+      return name switch {
         "Host" => root.Deserialize<HostFact>(options),
         "AccountInformation" => root.Deserialize<AccountInformationFact>(options),
         "Workspace" => root.Deserialize<WorkspaceFact>(options),
@@ -156,8 +183,7 @@ namespace Dyalog.Hmon.Client.Lib
     }
     public override void Write(Utf8JsonWriter writer, InternalLocationInfo? value, JsonSerializerOptions options)
     {
-      if (value == null)
-      {
+      if (value == null) {
         writer.WriteNullValue();
         return;
       }

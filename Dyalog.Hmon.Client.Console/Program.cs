@@ -1,82 +1,153 @@
 ﻿// Example consumer workflow for Dyalog.Hmon.Client
-
 using Dyalog.Hmon.Client.Lib;
 
-using Serilog;
+using Spectre.Console;
+
+using System.Collections.Concurrent;
 
 class Program
 {
   static async Task RunMonitoringService(CancellationToken cancellationToken)
   {
-    Console.WriteLine("Starting Dyalog.Hmon.Client monitoring service...");
+    AnsiConsole.MarkupLine("[bold green]Starting Dyalog.Hmon.Client monitoring service...[/]");
 
     await using var orchestrator = new HmonOrchestrator();
 
-    // Unified event stream: start as early as possible
+    // State tracking
+    var servers = new ConcurrentDictionary<Guid, (string Name, string Host)>();
+    var facts = new ConcurrentDictionary<Guid, Dictionary<string, string>>();
+    var subscriptions = new ConcurrentDictionary<Guid, HashSet<string>>();
+    var recentEvents = new ConcurrentDictionary<Guid, List<string>>();
+
+    // Unified event stream: update state on events
     var eventTask = Task.Run(async () => {
-      await foreach (var evt in orchestrator.Events.WithCancellation(cancellationToken)) {
-        Log.Information("Event: {EventType} (Session: {SessionId})", evt.GetType().Name, evt.SessionId);
+      try {
+        await foreach (var evt in orchestrator.Events.WithCancellation(cancellationToken)) {
+          var sessionId = evt.SessionId;
+          // Debug: track all event types for diagnostics
+          var debugList = recentEvents.GetOrAdd(sessionId, _ => new List<string>());
+          debugList.Insert(0, evt.GetType().Name);
+          if (debugList.Count > 10) debugList.RemoveAt(debugList.Count - 1);
+
+          switch (evt) {
+            case FactsReceivedEvent factsEvt:
+              var factDict = facts.GetOrAdd(sessionId, _ => new Dictionary<string, string>());
+              foreach (var fact in factsEvt.Facts.Facts) {
+                string value = fact switch {
+                  WorkspaceFact ws => $"Used: {ws.Used}, Available: {ws.Available}, Compactions: {ws.Compactions}, GarbageCollections: {ws.GarbageCollections}, Allocation: {ws.Allocation}",
+                  ThreadCountFact tc => $"Total: {tc.Total}, Suspended: {tc.Suspended}",
+                  HostFact host => $"Machine: {host.Machine.Name}, PID: {host.Machine.PID}",
+                  _ => fact.ToString() ?? ""
+                };
+                factDict[fact.Name] = value;
+              }
+              break;
+            case SubscribedResponseReceivedEvent subEvt:
+              subscriptions[sessionId] = new HashSet<string>(subEvt.Response.Events.Select(e => e.Name));
+              break;
+            case NotificationReceivedEvent notifEvt:
+              var eventList = recentEvents.GetOrAdd(sessionId, _ => new List<string>());
+              var eventName = notifEvt.Notification.Event.Name;
+              eventList.Insert(0, eventName);
+              if (eventList.Count > 5) eventList.RemoveAt(eventList.Count - 1);
+              break;
+          }
+        }
+      } catch (OperationCanceledException) {
+        // Expected on cancellation, exit gracefully
       }
     });
 
     orchestrator.ClientConnected += async (args) => {
-      Log.Information("[+] CONNECTED: {Name} (Session: {SessionId})", args.FriendlyName ?? args.Host, args.SessionId);
+      servers[args.SessionId] = (args.FriendlyName ?? args.Host, args.Host);
 
-      // Shared timeout for orchestrator operations
       var orchestratorTimeout = TimeSpan.FromSeconds(20);
 
-      Log.Debug("Subscribing to UntrappedSignal events for session {SessionId}", args.SessionId);
+      // Subscribe to UntrappedSignal
       try {
         var subscribeTask = orchestrator.SubscribeAsync(args.SessionId, [SubscriptionEvent.UntrappedSignal], cancellationToken);
-        if (await Task.WhenAny(subscribeTask, Task.Delay(orchestratorTimeout, cancellationToken)) == subscribeTask) {
-          Log.Debug("AFTER await SubscribeAsync"); // Removed redundant log
-        } else {
-          Log.Error("SubscribeAsync timed out after {Timeout} seconds", orchestratorTimeout.TotalSeconds);
-        }
-      } catch (Exception ex) {
-        Log.Error(ex, "Exception during SubscribeAsync");
-      }
-      Log.Debug("Subscription to UntrappedSignal complete for session {SessionId}", args.SessionId);
+        await subscribeTask;
+      } catch { }
 
-      Log.Debug("Starting PollFacts for Workspace and ThreadCount for session {SessionId}", args.SessionId);
+      // Poll facts
       try {
         var pollTask = orchestrator.PollFactsAsync(args.SessionId, [FactType.Workspace, FactType.ThreadCount], TimeSpan.FromSeconds(5), cancellationToken);
-        if (await Task.WhenAny(pollTask, Task.Delay(orchestratorTimeout, cancellationToken)) == pollTask) {
-          Log.Debug("PollFacts started for session {SessionId}", args.SessionId);
-        } else {
-          Log.Error("PollFactsAsync timed out after {Timeout} seconds", orchestratorTimeout.TotalSeconds);
-        }
-      } catch (Exception ex) {
-        Log.Error(ex, "Exception during PollFactsAsync");
-      }
+        await pollTask;
+      } catch { }
+
     };
 
     orchestrator.ClientDisconnected += (args) => {
-      Log.Warning("[-] DISCONNECTED: {Name}. Reason: {Reason}", args.FriendlyName ?? args.Host, args.Reason);
+      servers.TryRemove(args.SessionId, out _);
+      facts.TryRemove(args.SessionId, out _);
+      subscriptions.TryRemove(args.SessionId, out _);
       return Task.CompletedTask;
     };
 
-    // Add the local server for demo
-    orchestrator.AddServer("127.0.0.1", 8080, "ExampleServer");
+    //orchestrator.AddServer("127.0.0.1", 8080, "Server 1");
+    //orchestrator.AddServer("127.0.0.1", 8081, "Server 2");
+    var listener = orchestrator.StartListenerAsync("0.0.0.0", 8080).ContinueWith(t => {
+      if (t.IsFaulted) {
+        AnsiConsole.MarkupLine("[bold red]Failed to start listener:[/] " + t.Exception?.GetBaseException().Message);
+      } else {
+        AnsiConsole.MarkupLine("[bold green]Listener started successfully.[/]");
+      }
+    });
 
-    Log.Information("Press Enter to exit...");
-    Console.ReadLine();
-    // Cleanup is handled by Main
+    // Live table display
+    await AnsiConsole.Live(new Table()
+    .AddColumn("SessionId")
+    .AddColumn("Name")
+    .AddColumn("Host")
+    .AddColumn("Facts")
+    .AddColumn("Subscribed Events")
+    .AddColumn("Recent Events")
+).StartAsync(async ctx => {
+  try {
+    while (!cancellationToken.IsCancellationRequested) {
+      var table = new Table()
+          .AddColumn("SessionId")
+          .AddColumn("Name")
+          .AddColumn("Host")
+          .AddColumn("Facts")
+          .AddColumn("Subscribed Events")
+          .AddColumn("Recent Events");
+
+      foreach (var (sessionId, (name, host)) in servers) {
+        var factStr = facts.TryGetValue(sessionId, out var fs)
+            ? string.Join("\n", fs.Select(kv => $"{kv.Key}: {kv.Value}"))
+            : "";
+        var subStr = subscriptions.TryGetValue(sessionId, out var subs)
+            ? string.Join(", ", subs)
+            : (recentEvents.TryGetValue(sessionId, out var recentEvList) && recentEvList.Any(e => e == "UntrappedSignal") ? "UntrappedSignal" : "");
+        var eventsStr = recentEvents.TryGetValue(sessionId, out var evList)
+            ? string.Join("\n", evList)
+            : "";
+        table.AddRow(sessionId.ToString(), name, host, factStr, subStr, eventsStr);
+      }
+
+      ctx.UpdateTarget(table);
+      await Task.Delay(500, cancellationToken);
+    }
+  } catch (TaskCanceledException) {
+    // Graceful exit on cancellation
+  }
+});
+
+    await eventTask;
     await orchestrator.DisposeAsync();
-    Log.CloseAndFlush();
   }
 
   static async Task Main(string[] args)
   {
-    Log.Logger = new LoggerConfiguration()
-        .WriteTo.Console()
-        .MinimumLevel.Debug()
-        .CreateLogger();
-
     using var cts = new CancellationTokenSource();
     var runTask = RunMonitoringService(cts.Token);
     Console.ReadLine();
     cts.Cancel();
-    await runTask;
+    try {
+      await runTask;
+    } catch (OperationCanceledException) {
+      // Graceful shutdown
+    }
   }
 }

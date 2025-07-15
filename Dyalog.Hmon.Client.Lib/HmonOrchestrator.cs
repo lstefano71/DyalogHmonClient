@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Channels;
+using System.Threading.Tasks;
 
 namespace Dyalog.Hmon.Client.Lib;
 
@@ -16,6 +17,8 @@ public class HmonOrchestrator : IAsyncDisposable
   private readonly Channel<HmonEvent> _eventChannel = Channel.CreateUnbounded<HmonEvent>();
   private readonly ConcurrentDictionary<Guid, HmonConnection> _connections = new();
   private readonly ConcurrentDictionary<Guid, ServerConnection> _servers = new();
+
+  private int _disposeCalled = 0;
 
   public HmonOrchestrator(HmonOrchestratorOptions? options = null)
   {
@@ -42,50 +45,52 @@ public class HmonOrchestrator : IAsyncDisposable
   /// <param name="host">Host address to bind.</param>
   /// <param name="port">Port to bind.</param>
   /// <param name="ct">Cancellation token.</param>
-  public async Task StartListenerAsync(string host, int port, CancellationToken ct = default)
+  public Task StartListenerAsync(string host, int port, CancellationToken ct = default)
   {
-    var listener = new TcpListener(IPAddress.Parse(host), port);
-    listener.Start();
-    ct.Register(() => listener.Stop());
+    return Task.Run(async () => {
+      var listener = new TcpListener(IPAddress.Parse(host), port);
+      listener.Start();
+      ct.Register(() => listener.Stop());
 
-    var logger = Log.Logger.ForContext<HmonOrchestrator>();
-    try {
-      while (!ct.IsCancellationRequested) {
-        var tcpClient = await listener.AcceptTcpClientAsync(ct);
-        var sessionId = Guid.NewGuid();
-        logger.Debug("Accepted new connection (SessionId={SessionId})", sessionId);
-        var remoteEndPoint = (IPEndPoint)tcpClient.Client.RemoteEndPoint!;
-        var connection = new HmonConnection(
-            tcpClient,
-            sessionId,
-            _eventChannel.Writer,
-            async () => {
-              logger.Debug("Connection closed (SessionId={SessionId})", sessionId);
-              _connections.TryRemove(sessionId, out _);
-              if (ClientDisconnected != null) {
-                await ClientDisconnected.Invoke(new ClientDisconnectedEventArgs(sessionId, remoteEndPoint.Address.ToString(), remoteEndPoint.Port, null, "Remote client disconnected"));
-              }
-            },
-            (args) => { if (ClientConnected != null) return ClientConnected.Invoke(args); return Task.CompletedTask; } // Pass the ClientConnected event handler
-        );
-        _connections.TryAdd(sessionId, connection);
+      var logger = Log.Logger.ForContext<HmonOrchestrator>();
+      try {
+        while (!ct.IsCancellationRequested) {
+          var tcpClient = await listener.AcceptTcpClientAsync(ct);
+          var sessionId = Guid.NewGuid();
+          logger.Debug("Accepted new connection (SessionId={SessionId})", sessionId);
+          var remoteEndPoint = (IPEndPoint)tcpClient.Client.RemoteEndPoint!;
+          var connection = new HmonConnection(
+              tcpClient,
+              sessionId,
+              _eventChannel.Writer,
+              async () => {
+                logger.Debug("Connection closed (SessionId={SessionId})", sessionId);
+                _connections.TryRemove(sessionId, out _);
+                if (ClientDisconnected != null) {
+                  await ClientDisconnected.Invoke(new ClientDisconnectedEventArgs(sessionId, remoteEndPoint.Address.ToString(), remoteEndPoint.Port, null, "Remote client disconnected"));
+                }
+              },
+              (args) => { if (ClientConnected != null) return ClientConnected.Invoke(args); return Task.CompletedTask; } // Pass the ClientConnected event handler
+          );
+          _connections.TryAdd(sessionId, connection);
 
-        try {
-          await connection.InitializeAsync(ct, remoteEndPoint.Address.ToString(), remoteEndPoint.Port);
-        } catch (Exception ex) {
-          logger.Error(ex, "Connection initialization failed (SessionId={SessionId}), cleaning up connection", sessionId);
-          _connections.TryRemove(sessionId, out _);
-          await connection.DisposeAsync();
-          continue;
+          try {
+            await connection.InitializeAsync(ct, remoteEndPoint.Address.ToString(), remoteEndPoint.Port);
+          } catch (Exception ex) {
+            logger.Error(ex, "Connection initialization failed (SessionId={SessionId}), cleaning up connection", sessionId);
+            _connections.TryRemove(sessionId, out _);
+            await connection.DisposeAsync();
+            continue;
+          }
         }
+      } catch (OperationCanceledException) {
+        logger.Debug("Listener canceled");
+        // Expected when the cancellation token is triggered.
+      } finally {
+        logger.Information("Listener stopped");
+        listener.Stop();
       }
-    } catch (OperationCanceledException) {
-      logger.Debug("Listener canceled");
-      // Expected when the cancellation token is triggered.
-    } finally {
-      logger.Information("Listener stopped");
-      listener.Stop();
-    }
+    });
   }
 
   /// <summary>
@@ -244,13 +249,16 @@ public class HmonOrchestrator : IAsyncDisposable
   /// </summary>
   public async ValueTask DisposeAsync()
   {
+    if (Interlocked.Exchange(ref _disposeCalled, 1) != 0)
+      return; // Already disposed
+
     foreach (var server in _servers.Values) {
-      await server.DisposeAsync();
+        await server.DisposeAsync();
     }
     _servers.Clear();
 
     foreach (var connection in _connections.Values) {
-      await connection.DisposeAsync();
+        await connection.DisposeAsync();
     }
     _connections.Clear();
 

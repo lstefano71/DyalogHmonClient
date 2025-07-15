@@ -1,7 +1,6 @@
 using Dyalog.Hmon.Client.Lib;
 
 using Serilog;// Marker interface for payloads that support UID correlation
-using Serilog.Core;
 
 using System.Buffers;
 using System.Collections.Concurrent;
@@ -247,8 +246,7 @@ internal class HmonConnection : IAsyncDisposable
       return;
 
     HmonEvent? hmonEvent =
-      command switch
-      {
+      command switch {
         "Facts" => new FactsReceivedEvent(
           _sessionId,
           JsonSerializer.Deserialize<FactsResponse>(
