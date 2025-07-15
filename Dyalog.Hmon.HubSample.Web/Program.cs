@@ -15,11 +15,10 @@ builder.Services.AddOptions<HubSampleConfig>()
     .Services.AddSingleton<IValidateOptions<HubSampleConfig>, HubSampleConfigValidator>();
 
 // Use Serilog with log level from config if available
-var tempProvider = builder.Services.BuildServiceProvider();
-var tempOptions = tempProvider.GetRequiredService<IOptions<HubSampleConfig>>().Value;
 LogEventLevel logLevel = LogEventLevel.Information;
-if (!string.IsNullOrWhiteSpace(tempOptions.LogLevel) &&
-    Enum.TryParse<Serilog.Events.LogEventLevel>(tempOptions.LogLevel, true, out var parsedLevel))
+var logLevelConfig = builder.Configuration["LogLevel"];
+if (!string.IsNullOrWhiteSpace(logLevelConfig) &&
+    Enum.TryParse<Serilog.Events.LogEventLevel>(logLevelConfig, true, out var parsedLevel))
     logLevel = parsedLevel;
 
 Log.Logger = new LoggerConfiguration()
