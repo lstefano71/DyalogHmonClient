@@ -1,18 +1,20 @@
 # Active Context: Dyalog.Hmon.Client
 
-_Last reviewed: 2025-07-15 15:58 CEST_
+_Last reviewed: 2025-07-15 17:48 CEST_
 
 ## Current Focus
-- HMon Hub Sample: HMon orchestrator integration, real-time fact aggregation, and WebSocket endpoint for real-time event/fact updates implemented.
-- REST API endpoints (/facts, /status) now reflect live data (when HMon servers are available).
+- HMon Hub Sample: HMon orchestrator integration, real-time fact aggregation, WebSocket endpoint for real-time event/fact updates, and robust error handling are implemented.
+- REST API endpoints (/facts, /status) reflect live data (when HMon servers are available).
 - Auto-shutdown, config loader, and Serilog logging are complete.
 - Event subscription and per-session event history (configurable) implemented.
 - Events are sent immediately through the websocket with timestamp and payload.
-- Error handling improvements in progress.
+- Error handling and connection status reporting are finalized.
 
 ## Next Steps
-- Finalize error handling and connection status reporting.
-- Update memory bank and TODO.md after WebSocket and error handling are implemented.
+- Thoroughly test handshake, interaction API, and connection reliability, including error/failure scenarios.
+- Add comprehensive XML documentation.
+- Write and run unit/integration tests.
+- Update documentation as needed.
 
 ## Previous Focus
 - HmonOrchestrator interaction API (GetFactsAsync, GetLastKnownStateAsync, PollFactsAsync, StopFactsPollingAsync, BumpFactsAsync, SubscribeAsync, ConnectRideAsync, DisconnectRideAsync) implemented.
@@ -39,10 +41,3 @@ _Last reviewed: 2025-07-15 15:58 CEST_
 - Sample client and documentation refactored to use SessionMonitorBuilder for session management and state updates.
 - Sample client documentation updated at `docs/sample-client.md` to describe builder-based workflow.
 - Documentation reviewed and updated.
-
-## Next Steps
-- Thoroughly test handshake, interaction API, and connection reliability, including error/failure scenarios.
-- Add XML documentation.
-- Write and run unit/integration tests.
-
-_Memory bank fully reviewed and updated as of 2025-07-15 17:31 CEST._

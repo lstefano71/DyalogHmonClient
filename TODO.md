@@ -12,6 +12,5 @@
 - [x] Implement WebSocket endpoint (/ws) for real-time event/fact updates.
 - [x] Add event subscription and per-session event history (configurable).
 - [x] Events are sent immediately through the websocket with timestamp and payload.
-- [ ] Add robust error handling and reconnection logic.
+- [x] Add robust error handling and reconnection logic.
 - [ ] Write unit/integration tests and documentation.
-- [ ] Update memory bank and TODO.md as progress is made.

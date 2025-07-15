@@ -1,6 +1,6 @@
 # Progress: Dyalog.Hmon.Client
 
-_Last reviewed: 2025-07-15 15:58 CEST_
+_Last reviewed: 2025-07-15 17:48 CEST_
 
 ## Current Status
 - Core infrastructure and foundational models are implemented.
@@ -25,29 +25,19 @@ _Last reviewed: 2025-07-15 15:58 CEST_
 - Sample client and documentation refactored to use SessionMonitorBuilder for session management and state updates.
 - Sample client documentation updated at `docs/sample-client.md` to describe builder-based workflow.
 - Documentation reviewed and updated.
+- HMon Hub Sample: configuration-driven console app, config loader (CLI/env overrides), Serilog logging (console/extensible), HMon server connectivity and poll listener, in-memory aggregation of facts, REST API endpoints (/facts, /status) using ASP.NET Core Minimal API, WebSocket endpoint (/ws) for real-time event/fact updates, robust error handling and reconnection logic, event subscription, per-session event history.
 
 ## What's Left to Build
-- HMon Hub Sample:
-  - Create new console app project.
-  - Implement configuration model and loader (support CLI/env overrides).
-  - Set up Serilog logging (console, extensible).
-  - Implement HMon server connectivity and poll listener.
-  - Build in-memory aggregation of facts.
-  - Implement REST API endpoints (/facts, /status) using ASP.NET Core Minimal API.
-  - Implement WebSocket endpoint (/ws) for real-time event/fact updates.
-  - Add robust error handling and reconnection logic.
-  - Write unit/integration tests and documentation.
-  - Update memory bank and TODO.md as progress is made.
-- Reliability: test handshake, interaction API, connection retry logic, error handling, and state management.
-- Usability: add XML documentation to all public APIs.
-- Testability: write and run unit and integration tests for all core logic.
+- Write and run unit/integration tests for all core logic.
+- Add comprehensive XML documentation to all public APIs.
+- Thoroughly test handshake, interaction API, connection retry logic, error handling, and state management.
+- Update documentation as needed.
 
 ## Known Issues
-- Reliability and error handling require thorough testing.
-- Documentation and tests are incomplete.
+- Testing and documentation are not yet fully complete.
 
 ## Evolution of Project Decisions
 - Implementation follows PRD and memory bank best practices.
 - Tasks and progress are tracked in TODO.md and reflected here for accuracy.
 
-_Memory bank fully reviewed and confirmed up to date as of 2025-07-15 15:01 CEST._
+_Memory bank fully reviewed and confirmed up to date as of 2025-07-15 17:48 CEST._
