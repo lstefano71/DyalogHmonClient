@@ -53,9 +53,10 @@ The application loads configuration from a JSON file (default: `config.json`), w
 
 ### Configuration Keys
 
-- `hmonServers`: **(required)** List of HMON server endpoints to connect to. Each entry: `{ "name": string, "host": string, "port": int }`
+- `api`: **(required)** IP and port for the REST/WebSocket API (object: `{ "ip": string, "port": int }`)
+- `hmonServers`: List of HMON server endpoints to connect to. Each entry: `{ "name": string, "host": string, "port": int }`
 - `pollListener`: IP and port for the poll listener (object: `{ "ip": string, "port": int }`)
-- `api`: IP and port for the REST/WebSocket API (object: `{ "ip": string, "port": int }`)
+- At least one of `hmonServers` or `pollListener` must be present.
 - `logLevel`: Logging verbosity (e.g., "Debug", "Information")
 - `pollFacts`: List of fact names to poll from servers (default: `["host", "threads"]`)
 - `pollIntervalSeconds`: Polling interval in seconds (default: `5`)

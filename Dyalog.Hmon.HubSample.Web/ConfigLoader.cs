@@ -50,6 +50,16 @@ public static class ConfigLoader
     if (config.HmonServers == null)
       config = config with { HmonServers = [] };
 
+    // Enforce: at least one of HmonServers or PollListener must be present
+    bool hasHmonServers = config.HmonServers is { Count: > 0 };
+    bool hasPollListener = config.PollListener is not null;
+    if (!hasHmonServers && !hasPollListener)
+      throw new InvalidOperationException("Configuration must specify at least one of 'hmonServers' or 'pollListener'.");
+
+    // Enforce: Api is required
+    if (config.Api is null)
+      throw new InvalidOperationException("Configuration must specify 'api' (REST/WebSocket endpoint settings).");
+
     // Ensure PollFacts is never null or empty, default to ["host", "threads"]
     if (config.PollFacts == null || config.PollFacts.Count == 0)
       config = config with { PollFacts = ["host", "threads"] };
