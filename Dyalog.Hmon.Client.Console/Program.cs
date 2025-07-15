@@ -2,8 +2,20 @@
 using Dyalog.Hmon.Client.Lib;
 
 using Spectre.Console;
+using Spectre.Console.Rendering;
 
 using System.Collections.Concurrent;
+using System.Globalization;
+using System.Reflection;
+
+class SessionFacts
+{
+    public WorkspaceFact? Workspace { get; set; }
+    public ThreadCountFact? ThreadCount { get; set; }
+    public HostFact? Host { get; set; }
+    public AccountInformationFact? AccountInformation { get; set; }
+    // Add more fact types as needed
+}
 
 class Program
 {
@@ -15,7 +27,7 @@ class Program
 
     // State tracking
     var servers = new ConcurrentDictionary<Guid, (string Name, string Host)>();
-    var facts = new ConcurrentDictionary<Guid, Dictionary<string, string>>();
+    var facts = new ConcurrentDictionary<Guid, SessionFacts>();
     var subscriptions = new ConcurrentDictionary<Guid, HashSet<string>>();
     var recentEvents = new ConcurrentDictionary<Guid, List<string>>();
 
@@ -31,15 +43,23 @@ class Program
 
           switch (evt) {
             case FactsReceivedEvent factsEvt:
-              var factDict = facts.GetOrAdd(sessionId, _ => []);
+              var sessionFacts = facts.GetOrAdd(sessionId, _ => new SessionFacts());
               foreach (var fact in factsEvt.Facts.Facts) {
-                string value = fact switch {
-                  WorkspaceFact ws => $"Used: {ws.Used}, Available: {ws.Available}, Compactions: {ws.Compactions}, GarbageCollections: {ws.GarbageCollections}, Allocation: {ws.Allocation}",
-                  ThreadCountFact tc => $"Total: {tc.Total}, Suspended: {tc.Suspended}",
-                  HostFact host => $"Machine: {host.Machine.Name}, PID: {host.Machine.PID}",
-                  _ => fact.ToString() ?? ""
-                };
-                factDict[fact.Name] = value;
+                switch (fact) {
+                  case WorkspaceFact ws:
+                    sessionFacts.Workspace = ws;
+                    break;
+                  case ThreadCountFact tc:
+                    sessionFacts.ThreadCount = tc;
+                    break;
+                  case HostFact host:
+                    sessionFacts.Host = host;
+                    break;
+                  case AccountInformationFact acc:
+                    sessionFacts.AccountInformation = acc;
+                    break;
+                  // Add more fact types as needed
+                }
               }
               break;
             case SubscribedResponseReceivedEvent subEvt:
@@ -71,7 +91,7 @@ class Program
 
       // Poll facts
       try {
-        var pollTask = orchestrator.PollFactsAsync(args.SessionId, [FactType.Workspace, FactType.ThreadCount], TimeSpan.FromSeconds(5), cancellationToken);
+        var pollTask = orchestrator.PollFactsAsync(args.SessionId, [FactType.Workspace, FactType.ThreadCount, FactType.Host], TimeSpan.FromSeconds(5), cancellationToken);
         await pollTask;
       } catch { }
 
@@ -108,22 +128,37 @@ class Program
       var table = new Table()
           .AddColumn("SessionId")
           .AddColumn("Name")
-          .AddColumn("Host")
-          .AddColumn("Facts")
-          .AddColumn("Subscribed Events")
-          .AddColumn("Recent Events");
+//          .AddColumn("Host")
+          .AddColumn("Facts");
+//          .AddColumn("Subscribed Events")
+//          .AddColumn("Recent Events");
 
       foreach (var (sessionId, (name, host)) in servers) {
-        var factStr = facts.TryGetValue(sessionId, out var fs)
-            ? string.Join("\n", fs.Select(kv => $"{kv.Key}: {kv.Value}"))
-            : "";
+        // Render HostFact under SessionId if present
+        IRenderable sessionIdCell;
+        if (facts.TryGetValue(sessionId, out var sessionFacts) && sessionFacts.Host is not null)
+        {
+          var grid = new Grid();
+          grid.AddColumn();
+          grid.AddRow(new Text(sessionId.ToString()));
+          grid.AddRow(RenderHostFactTable(sessionFacts.Host, host));
+          sessionIdCell = grid;
+        }
+        else
+        {
+          sessionIdCell = new Text(sessionId.ToString());
+        }
+        // Render facts as nested tables by category (excluding HostFact)
+        IRenderable factCell = facts.TryGetValue(sessionId, out sessionFacts)
+            ? RenderFactsTable(sessionFacts)
+            : new Text("");
         var subStr = subscriptions.TryGetValue(sessionId, out var subs)
             ? string.Join(", ", subs)
             : (recentEvents.TryGetValue(sessionId, out var recentEvList) && recentEvList.Any(e => e == "UntrappedSignal") ? "UntrappedSignal" : "");
         var eventsStr = recentEvents.TryGetValue(sessionId, out var evList)
             ? string.Join("\n", evList)
             : "";
-        table.AddRow(sessionId.ToString(), name, host, factStr, subStr, eventsStr);
+        table.AddRow(sessionIdCell, new Text(name), factCell);
       }
 
       ctx.UpdateTarget(table);
@@ -136,6 +171,95 @@ class Program
 
     await eventTask;
     await orchestrator.DisposeAsync();
+  }
+
+  // Helper to render facts as nested tables with minimal borders
+  static IRenderable RenderFactsTable(SessionFacts facts)
+  {
+    var grid = new Grid();
+    grid.AddColumn();
+    grid.AddColumn();
+    if (facts.Workspace is not null)
+      grid.AddRow(RenderWorkspaceFactTable(facts.Workspace));
+    if (facts.ThreadCount is not null)
+      grid.AddRow(RenderThreadCountFactTable(facts.ThreadCount));
+    if (facts.AccountInformation is not null)
+      grid.AddRow(RenderAccountInformationFactTable(facts.AccountInformation));
+    return grid;
+  }
+
+  static Table RenderWorkspaceFactTable(WorkspaceFact ws)
+  {
+    var table = new Table();
+    table.Border(TableBorder.Simple);
+    table.AddColumn(new TableColumn("[bold]Workspace[/]").LeftAligned());
+    table.AddColumn(new TableColumn("").RightAligned());
+    table.AddRow("WSID", ws.WSID);
+    table.AddRow("Available", ws.Available.ToString("N0", CultureInfo.InvariantCulture));
+    table.AddRow("Used", ws.Used.ToString("N0", CultureInfo.InvariantCulture));
+    table.AddRow("Compactions", ws.Compactions.ToString("N0", CultureInfo.InvariantCulture));
+    table.AddRow("GarbageCollections", ws.GarbageCollections.ToString("N0", CultureInfo.InvariantCulture));
+    table.AddRow("GarbagePockets", ws.GarbagePockets.ToString("N0", CultureInfo.InvariantCulture));
+    table.AddRow("FreePockets", ws.FreePockets.ToString("N0", CultureInfo.InvariantCulture));
+    table.AddRow("UsedPockets", ws.UsedPockets.ToString("N0", CultureInfo.InvariantCulture));
+    table.AddRow("Sediment", ws.Sediment.ToString("N0", CultureInfo.InvariantCulture));
+    table.AddRow("Allocation", ws.Allocation.ToString("N0", CultureInfo.InvariantCulture));
+    table.AddRow("AllocationHWM", ws.AllocationHWM.ToString("N0", CultureInfo.InvariantCulture));
+    table.AddRow("TrapReserveWanted", ws.TrapReserveWanted.ToString("N0", CultureInfo.InvariantCulture));
+    table.AddRow("TrapReserveActual", ws.TrapReserveActual.ToString("N0", CultureInfo.InvariantCulture));
+    return table;
+  }
+
+  static Table RenderThreadCountFactTable(ThreadCountFact tc)
+  {
+    var table = new Table();
+    table.Border(TableBorder.Simple);
+    table.AddColumn(new TableColumn("[bold]ThreadCount[/]").LeftAligned());
+    table.AddColumn(new TableColumn("").RightAligned());
+    table.AddRow("Total", tc.Total.ToString());
+    table.AddRow("Suspended", tc.Suspended.ToString());
+    return table;
+  }
+
+  static Table RenderHostFactTable(HostFact host, string hostName)
+  {
+    var table = new Table();
+    table.Border(TableBorder.Simple);
+    table.AddColumn(new TableColumn("[bold]Host[/]").LeftAligned());
+    table.AddColumn(new TableColumn(hostName).RightAligned());
+    table.AddRow("Machine.Name", host.Machine.Name);
+    table.AddRow("Machine.User", host.Machine.User);
+    table.AddRow("Machine.PID", host.Machine.PID.ToString());
+    table.AddRow("Machine.AccessLevel", host.Machine.AccessLevel.ToString());
+    table.AddRow("Interpreter.Version", host.Interpreter.Version);
+    table.AddRow("Interpreter.BitWidth", host.Interpreter.BitWidth.ToString());
+    table.AddRow("Interpreter.IsUnicode", host.Interpreter.IsUnicode.ToString());
+    table.AddRow("Interpreter.IsRuntime", host.Interpreter.IsRuntime.ToString());
+    table.AddRow("Interpreter.SessionUUID", host.Interpreter.SessionUUID ?? "");
+    table.AddRow("CommsLayer.Version", host.CommsLayer?.Version ?? "");
+    table.AddRow("CommsLayer.Address", host.CommsLayer?.Address ?? "");
+    table.AddRow("CommsLayer.Port4", host.CommsLayer?.Port4.ToString());
+    table.AddRow("CommsLayer.Port6", host.CommsLayer?.Port6.ToString());
+    table.AddRow("RIDE.Listening", host.RIDE.Listening.ToString());
+    table.AddRow("RIDE.HTTPServer", host.RIDE.HTTPServer?.ToString() ?? "");
+    table.AddRow("RIDE.Version", host.RIDE.Version ?? "");
+    table.AddRow("RIDE.Address", host.RIDE.Address ?? "");
+    table.AddRow("RIDE.Port4", host.RIDE.Port4?.ToString() ?? "");
+    table.AddRow("RIDE.Port6", host.RIDE.Port6?.ToString() ?? "");
+    return table;
+  }
+
+  static Table RenderAccountInformationFactTable(AccountInformationFact acc)
+  {
+    var table = new Table();
+    table.Border(TableBorder.Simple);
+    table.AddColumn(new TableColumn("[bold]AccountInformation[/]").LeftAligned());
+    table.AddColumn(new TableColumn("").RightAligned());
+    table.AddRow("UserIdentification", acc.UserIdentification);
+    table.AddRow("ComputeTime", acc.ComputeTime.ToString());
+    table.AddRow("ConnectTime", acc.ConnectTime.ToString());
+    table.AddRow("KeyingTime", acc.KeyingTime.ToString());
+    return table;
   }
 
   static async Task Main(string[] args)
