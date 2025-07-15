@@ -11,19 +11,14 @@ namespace Dyalog.Hmon.Client.Lib;
 /// <summary>
 /// Central orchestrator for managing HMON connections and exposing a unified event stream.
 /// </summary>
-public class HmonOrchestrator : IAsyncDisposable
+public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncDisposable
 {
-  private readonly HmonOrchestratorOptions _options;
+  private readonly HmonOrchestratorOptions _options = options ?? new HmonOrchestratorOptions();
   private readonly Channel<HmonEvent> _eventChannel = Channel.CreateUnbounded<HmonEvent>();
   private readonly ConcurrentDictionary<Guid, HmonConnection> _connections = new();
   private readonly ConcurrentDictionary<Guid, ServerConnection> _servers = new();
 
   private int _disposeCalled = 0;
-
-  public HmonOrchestrator(HmonOrchestratorOptions? options = null)
-  {
-    _options = options ?? new HmonOrchestratorOptions();
-  }
 
   /// <summary>
   /// Unified asynchronous event stream for all HMON events.
@@ -75,7 +70,7 @@ public class HmonOrchestrator : IAsyncDisposable
           _connections.TryAdd(sessionId, connection);
 
           try {
-            await connection.InitializeAsync(ct, remoteEndPoint.Address.ToString(), remoteEndPoint.Port);
+            await connection.InitializeAsync(remoteEndPoint.Address.ToString(), remoteEndPoint.Port, null, ct);
           } catch (Exception ex) {
             logger.Error(ex, "Connection initialization failed (SessionId={SessionId}), cleaning up connection", sessionId);
             _connections.TryRemove(sessionId, out _);
@@ -90,7 +85,7 @@ public class HmonOrchestrator : IAsyncDisposable
         logger.Information("Listener stopped");
         listener.Stop();
       }
-    });
+    }, ct);
   }
 
   /// <summary>
@@ -136,7 +131,7 @@ public class HmonOrchestrator : IAsyncDisposable
       Serilog.Log.Logger.ForContext<HmonOrchestrator>().Error("GetFactsAsync: Session not found for sessionId={SessionId}", sessionId);
       throw new InvalidOperationException("Session not found");
     }
-    var payload = new GetFactsPayload(facts.Select(f => (int)f).ToArray());
+    var payload = new GetFactsPayload([.. facts.Select(f => (int)f)]);
     var evt = await conn.SendCommandAsync<FactsReceivedEvent>("GetFacts", payload, ct);
     return evt.Facts;
   }
@@ -166,7 +161,7 @@ public class HmonOrchestrator : IAsyncDisposable
   {
     if (!_connections.TryGetValue(sessionId, out var conn))
       throw new InvalidOperationException("Session not found");
-    var payload = new PollFactsPayload(facts.Select(f => (int)f).ToArray(), (int)interval.TotalMilliseconds);
+    var payload = new PollFactsPayload([.. facts.Select(f => (int)f)], (int)interval.TotalMilliseconds);
     await conn.SendCommandAsync<FactsReceivedEvent>("PollFacts", payload, ct);
   }
 
@@ -206,7 +201,7 @@ public class HmonOrchestrator : IAsyncDisposable
   {
     if (!_connections.TryGetValue(sessionId, out var conn))
       throw new InvalidOperationException("Session not found");
-    var payload = new SubscribePayload(events.Select(e => (int)e).ToArray());
+    var payload = new SubscribePayload([.. events.Select(e => (int)e)]);
     await conn.SendCommandAsync<SubscribedResponseReceivedEvent>("Subscribe", payload, ct);
   }
 

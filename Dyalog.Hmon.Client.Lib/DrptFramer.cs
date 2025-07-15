@@ -103,7 +103,7 @@ namespace Dyalog.Hmon.Client.Lib
       int headerOffset = 4; // For length prefix
 
       if (buffer.Length < 8) return false; // Not enough for length + magic
-      var magicBytes = buffer.Slice(4, 4).ToArray();
+      var magicBytes = buffer.Slice(headerOffset, headerOffset).ToArray();
       if (!magicBytes.AsSpan().SequenceEqual(_magic)) {
         throw new InvalidOperationException($"Invalid handshake magic number encountered. Expected '{Encoding.ASCII.GetString(_magic)}', got '{Encoding.ASCII.GetString(magicBytes)}'");
       }

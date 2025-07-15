@@ -50,11 +50,11 @@ internal class HmonConnection : IAsyncDisposable
   /// <summary>
   /// Performs the HMON handshake and starts processing messages.
   /// </summary>
-  /// <param name="ct">Cancellation token.</param>
   /// <param name="remoteAddress">Remote IP address for ClientConnected event.</param>
   /// <param name="remotePort">Remote port for ClientConnected event.</param>
+  /// <param name="ct">Cancellation token.</param>
   /// <param name="friendlyName">Optional friendly name for ClientConnected event.</param>
-  public async Task InitializeAsync(CancellationToken ct, string remoteAddress, int remotePort, string? friendlyName = null)
+  public async Task InitializeAsync(string remoteAddress, int remotePort, string? friendlyName = null, CancellationToken ct = default)
   {
     try {
       _logger.Debug("Initializing HmonConnection (SessionId={SessionId})", _sessionId);
@@ -81,7 +81,6 @@ internal class HmonConnection : IAsyncDisposable
   /// <param name="ct">Cancellation token.</param>
   public async Task<T> SendCommandAsync<T>(string command, object payload, CancellationToken ct) where T : HmonEvent
   {
-    _logger.Warning("SendCommandAsync called with command: {Command}", command);
     string? uid = null;
     object actualPayload = payload;
     if (payload is IUidPayload uidPayload) {
@@ -138,6 +137,12 @@ internal class HmonConnection : IAsyncDisposable
     }
   }
 
+  // Add a static field to cache JsonSerializerOptions
+  private static readonly JsonSerializerOptions CachedJsonSerializerOptions = new() {
+    Converters = { new FactJsonConverter() }
+  };
+
+  // Update the code to use the cached JsonSerializerOptions instance
   private async Task ParseAndDispatchMessageAsync(ReadOnlySequence<byte> message)
   {
     var reader = new Utf8JsonReader(message);
@@ -153,25 +158,25 @@ internal class HmonConnection : IAsyncDisposable
       return;
 
     HmonEvent? hmonEvent =
-      command switch {
-        "Facts" => new FactsReceivedEvent(
-          _sessionId,
-          JsonSerializer.Deserialize<FactsResponse>(
-            ref reader,
-            new JsonSerializerOptions { Converters = { new FactJsonConverter() } }
-          )!
-        ),
-        "Notification" => new NotificationReceivedEvent(_sessionId, JsonSerializer.Deserialize<NotificationResponse>(ref reader, HmonJsonContext.Default.NotificationResponse)!),
-        "LastKnownState" => new LastKnownStateReceivedEvent(_sessionId, JsonSerializer.Deserialize<LastKnownStateResponse>(ref reader, HmonJsonContext.Default.LastKnownStateResponse)!),
-        "Subscribed" => new SubscribedResponseReceivedEvent(_sessionId, JsonSerializer.Deserialize<SubscribedResponse>(ref reader, HmonJsonContext.Default.SubscribedResponse)!),
-        "RideConnection" => new RideConnectionReceivedEvent(_sessionId, JsonSerializer.Deserialize<RideConnectionResponse>(ref reader, HmonJsonContext.Default.RideConnectionResponse)!),
-        "UserMessage" => new UserMessageReceivedEvent(_sessionId, JsonSerializer.Deserialize<UserMessageResponse>(ref reader, HmonJsonContext.Default.UserMessageResponse)!),
-        "UnknownCommand" => new UnknownCommandEvent(_sessionId, JsonSerializer.Deserialize<UnknownCommandResponse>(ref reader, HmonJsonContext.Default.UnknownCommandResponse)!),
-        "MalformedCommand" => new MalformedCommandEvent(_sessionId, JsonSerializer.Deserialize<MalformedCommandResponse>(ref reader, HmonJsonContext.Default.MalformedCommandResponse)!),
-        "InvalidSyntax" => new InvalidSyntaxEvent(_sessionId, JsonSerializer.Deserialize<InvalidSyntaxResponse>(ref reader, HmonJsonContext.Default.InvalidSyntaxResponse)!),
-        "DisallowedUID" => new DisallowedUidEvent(_sessionId, JsonSerializer.Deserialize<DisallowedUidResponse>(ref reader, HmonJsonContext.Default.DisallowedUidResponse)!),
-        _ => null
-      };
+        command switch {
+          "Facts" => new FactsReceivedEvent(
+                _sessionId,
+                JsonSerializer.Deserialize<FactsResponse>(
+                    ref reader,
+                    CachedJsonSerializerOptions // Use cached options here
+                )!
+            ),
+          "Notification" => new NotificationReceivedEvent(_sessionId, JsonSerializer.Deserialize<NotificationResponse>(ref reader, HmonJsonContext.Default.NotificationResponse)!),
+          "LastKnownState" => new LastKnownStateReceivedEvent(_sessionId, JsonSerializer.Deserialize<LastKnownStateResponse>(ref reader, HmonJsonContext.Default.LastKnownStateResponse)!),
+          "Subscribed" => new SubscribedResponseReceivedEvent(_sessionId, JsonSerializer.Deserialize<SubscribedResponse>(ref reader, HmonJsonContext.Default.SubscribedResponse)!),
+          "RideConnection" => new RideConnectionReceivedEvent(_sessionId, JsonSerializer.Deserialize<RideConnectionResponse>(ref reader, HmonJsonContext.Default.RideConnectionResponse)!),
+          "UserMessage" => new UserMessageReceivedEvent(_sessionId, JsonSerializer.Deserialize<UserMessageResponse>(ref reader, HmonJsonContext.Default.UserMessageResponse)!),
+          "UnknownCommand" => new UnknownCommandEvent(_sessionId, JsonSerializer.Deserialize<UnknownCommandResponse>(ref reader, HmonJsonContext.Default.UnknownCommandResponse)!),
+          "MalformedCommand" => new MalformedCommandEvent(_sessionId, JsonSerializer.Deserialize<MalformedCommandResponse>(ref reader, HmonJsonContext.Default.MalformedCommandResponse)!),
+          "InvalidSyntax" => new InvalidSyntaxEvent(_sessionId, JsonSerializer.Deserialize<InvalidSyntaxResponse>(ref reader, HmonJsonContext.Default.InvalidSyntaxResponse)!),
+          "DisallowedUID" => new DisallowedUidEvent(_sessionId, JsonSerializer.Deserialize<DisallowedUidResponse>(ref reader, HmonJsonContext.Default.DisallowedUidResponse)!),
+          _ => null
+        };
 
     if (hmonEvent != null) {
       var uid = GetUid(hmonEvent);
@@ -183,7 +188,7 @@ internal class HmonConnection : IAsyncDisposable
     }
   }
 
-  private string? GetUid(HmonEvent hmonEvent)
+  private static string? GetUid(HmonEvent hmonEvent)
   {
     return hmonEvent switch {
       FactsReceivedEvent e => e.Facts.UID,

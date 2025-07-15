@@ -47,7 +47,7 @@ public class IntegrationTests
 
     // The orchestrator should not expose the failed session
     await Assert.ThrowsAnyAsync<Exception>(async () => {
-      await orchestrator.GetFactsAsync(sessionId, Array.Empty<Dyalog.Hmon.Client.Lib.FactType>(), default);
+      await orchestrator.GetFactsAsync(sessionId, [], default);
     });
 
     await orchestrator.DisposeAsync();

@@ -25,13 +25,13 @@ class Program
         await foreach (var evt in orchestrator.Events.WithCancellation(cancellationToken)) {
           var sessionId = evt.SessionId;
           // Debug: track all event types for diagnostics
-          var debugList = recentEvents.GetOrAdd(sessionId, _ => new List<string>());
+          var debugList = recentEvents.GetOrAdd(sessionId, _ => []);
           debugList.Insert(0, evt.GetType().Name);
           if (debugList.Count > 10) debugList.RemoveAt(debugList.Count - 1);
 
           switch (evt) {
             case FactsReceivedEvent factsEvt:
-              var factDict = facts.GetOrAdd(sessionId, _ => new Dictionary<string, string>());
+              var factDict = facts.GetOrAdd(sessionId, _ => []);
               foreach (var fact in factsEvt.Facts.Facts) {
                 string value = fact switch {
                   WorkspaceFact ws => $"Used: {ws.Used}, Available: {ws.Available}, Compactions: {ws.Compactions}, GarbageCollections: {ws.GarbageCollections}, Allocation: {ws.Allocation}",
@@ -43,10 +43,10 @@ class Program
               }
               break;
             case SubscribedResponseReceivedEvent subEvt:
-              subscriptions[sessionId] = new HashSet<string>(subEvt.Response.Events.Select(e => e.Name));
+              subscriptions[sessionId] = [.. subEvt.Response.Events.Select(e => e.Name)];
               break;
             case NotificationReceivedEvent notifEvt:
-              var eventList = recentEvents.GetOrAdd(sessionId, _ => new List<string>());
+              var eventList = recentEvents.GetOrAdd(sessionId, _ => []);
               var eventName = notifEvt.Notification.Event.Name;
               eventList.Insert(0, eventName);
               if (eventList.Count > 5) eventList.RemoveAt(eventList.Count - 1);
@@ -56,7 +56,7 @@ class Program
       } catch (OperationCanceledException) {
         // Expected on cancellation, exit gracefully
       }
-    });
+    }, cancellationToken);
 
     orchestrator.ClientConnected += async (args) => {
       servers[args.SessionId] = (args.FriendlyName ?? args.Host, args.Host);
@@ -86,13 +86,13 @@ class Program
 
     //orchestrator.AddServer("127.0.0.1", 8080, "Server 1");
     //orchestrator.AddServer("127.0.0.1", 8081, "Server 2");
-    var listener = orchestrator.StartListenerAsync("0.0.0.0", 8080).ContinueWith(t => {
+    var listener = orchestrator.StartListenerAsync("0.0.0.0", 8080, cancellationToken).ContinueWith(t => {
       if (t.IsFaulted) {
         AnsiConsole.MarkupLine("[bold red]Failed to start listener:[/] " + t.Exception?.GetBaseException().Message);
       } else {
         AnsiConsole.MarkupLine("[bold green]Listener started successfully.[/]");
       }
-    });
+    }, cancellationToken);
 
     // Live table display
     await AnsiConsole.Live(new Table()
