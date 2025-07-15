@@ -6,6 +6,7 @@ _Last reviewed: 2025-07-15 15:01 CEST_
 - HmonOrchestrator interaction API (GetFactsAsync, GetLastKnownStateAsync, PollFactsAsync, StopFactsPollingAsync, BumpFactsAsync, SubscribeAsync, ConnectRideAsync, DisconnectRideAsync) implemented.
 - Handshake protocol and connection validation now implemented as per RFCs.
 - Finalizing reliability (testing retry logic, robust error handling, state management).
+- Sample client and documentation now fully refactored to use streamlined SessionMonitorBuilder API.
 - Adding comprehensive XML documentation to all public APIs.
 - Writing unit and integration tests for core logic and orchestrator API.
 
@@ -23,7 +24,8 @@ _Last reviewed: 2025-07-15 15:01 CEST_
 - JSON serialization configured with System.Text.Json and source generation.
 - HmonOrchestrator constructor, connection management (listener, AddServer, RemoveServerAsync), event handling, and disposal implemented.
 - Consumer workflow example implemented in the console project.
-- Sample client documentation added at `docs/sample-client.md`.
+- Sample client and documentation refactored to use SessionMonitorBuilder for session management and state updates.
+- Sample client documentation updated at `docs/sample-client.md` to describe builder-based workflow.
 - Documentation reviewed and updated.
 
 ## Next Steps

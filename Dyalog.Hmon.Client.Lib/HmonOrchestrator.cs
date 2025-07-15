@@ -37,14 +37,10 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   // Internal: watches event stream and updates fact cache
   private async IAsyncEnumerable<HmonEvent> WatchAndCacheFacts([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
   {
-    await foreach (var evt in _eventChannel.Reader.ReadAllAsync(ct))
-    {
-      if (evt is FactsReceivedEvent factsEvt)
-      {
-        foreach (var fact in factsEvt.Facts.Facts)
-        {
-          if (fact != null)
-          {
+    await foreach (var evt in _eventChannel.Reader.ReadAllAsync(ct)) {
+      if (evt is FactsReceivedEvent factsEvt) {
+        foreach (var fact in factsEvt.Facts.Facts) {
+          if (fact != null) {
             _factCache[(evt.SessionId, fact.GetType())] = new FactCacheEntry(fact, DateTimeOffset.UtcNow);
             OnSessionUpdated?.Invoke(evt.SessionId, fact);
           }

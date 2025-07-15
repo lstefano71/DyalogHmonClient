@@ -1,4 +1,4 @@
-﻿// Example consumer workflow for Dyalog.Hmon.Client
+﻿// Example streamlined consumer workflow for Dyalog.Hmon.Client
 using Dyalog.Hmon.Client.Lib;
 
 using Spectre.Console;
@@ -15,12 +15,10 @@ class SessionFacts
   public AccountInformationFact? AccountInformation { get; set; }
   public ThreadsFact? Threads { get; set; }
   public SuspendedThreadsFact? SuspendedThreads { get; set; }
-  // Add more fact types as needed
 }
 
 class Program
 {
-  // Track carousel step across refreshes
   static int _carouselStep = 0;
 
   static async Task RunMonitoringService(CancellationToken cancellationToken)
@@ -29,96 +27,53 @@ class Program
 
     await using var orchestrator = new HmonOrchestrator();
 
-    // State tracking
     var servers = new ConcurrentDictionary<Guid, (string Name, string Host)>();
     var facts = new ConcurrentDictionary<Guid, SessionFacts>();
-    var subscriptions = new ConcurrentDictionary<Guid, HashSet<string>>();
     var recentEvents = new ConcurrentDictionary<Guid, List<string>>();
-
-    // Unified event stream: update state on events
-    var eventTask = Task.Run(async () => {
-      try {
-        await foreach (var evt in orchestrator.Events.WithCancellation(cancellationToken)) {
-          var sessionId = evt.SessionId;
-          // Debug: track all event types for diagnostics
-          var debugList = recentEvents.GetOrAdd(sessionId, _ => []);
-          debugList.Insert(0, evt.GetType().Name);
-          if (debugList.Count > 10) debugList.RemoveAt(debugList.Count - 1);
-
-          switch (evt) {
-            case FactsReceivedEvent factsEvt:
-              var sessionFacts = facts.GetOrAdd(sessionId, _ => new SessionFacts());
-              foreach (var fact in factsEvt.Facts.Facts) {
-                switch (fact) {
-                  case WorkspaceFact ws:
-                    sessionFacts.Workspace = ws;
-                    break;
-                  case ThreadCountFact tc:
-                    sessionFacts.ThreadCount = tc;
-                    break;
-                  case HostFact host:
-                    sessionFacts.Host = host;
-                    break;
-                  case AccountInformationFact acc:
-                    sessionFacts.AccountInformation = acc;
-                    break;
-                  case ThreadsFact threads:
-                    sessionFacts.Threads = threads;
-                    break;
-                  case SuspendedThreadsFact sthreads:
-                    sessionFacts.SuspendedThreads = sthreads;
-                    break;
-                    // Add more fact types as needed
-                }
-              }
-              break;
-            case SubscribedResponseReceivedEvent subEvt:
-              subscriptions[sessionId] = [.. subEvt.Response.Events.Select(e => e.Name)];
-              break;
-            case NotificationReceivedEvent notifEvt:
-              var eventList = recentEvents.GetOrAdd(sessionId, _ => []);
-              var eventName = notifEvt.Notification.Event.Name;
-              eventList.Insert(0, eventName);
-              if (eventList.Count > 5) eventList.RemoveAt(eventList.Count - 1);
-              break;
-          }
-        }
-      } catch (OperationCanceledException) {
-        // Expected on cancellation, exit gracefully
-      }
-    }, cancellationToken);
+    var builders = new ConcurrentDictionary<Guid, SessionMonitorBuilder>();
 
     orchestrator.ClientConnected += async (args) => {
       servers[args.SessionId] = (args.FriendlyName ?? args.Host, args.Host);
 
-      var orchestratorTimeout = TimeSpan.FromSeconds(20);
+      var builder = new SessionMonitorBuilder(orchestrator, args.SessionId)
+          .SubscribeTo(SubscriptionEvent.UntrappedSignal)
+          .PollFacts(TimeSpan.FromSeconds(5),
+              FactType.Workspace, FactType.ThreadCount, FactType.Host,
+              FactType.AccountInformation, FactType.Threads, FactType.SuspendedThreads)
+          .OnFactChanged(async fact => {
+            var sessionFacts = facts.GetOrAdd(args.SessionId, _ => new SessionFacts());
+            switch (fact) {
+              case WorkspaceFact ws: sessionFacts.Workspace = ws; break;
+              case ThreadCountFact tc: sessionFacts.ThreadCount = tc; break;
+              case HostFact host: sessionFacts.Host = host; break;
+              case AccountInformationFact acc: sessionFacts.AccountInformation = acc; break;
+              case ThreadsFact threads: sessionFacts.Threads = threads; break;
+              case SuspendedThreadsFact sthreads: sessionFacts.SuspendedThreads = sthreads; break;
+            }
+            await Task.CompletedTask;
+          })
+          .OnEvent(async evt => {
+            var eventList = recentEvents.GetOrAdd(args.SessionId, _ => []);
+            eventList.Insert(0, evt.GetType().Name);
+            if (eventList.Count > 10) eventList.RemoveAt(eventList.Count - 1);
+            await Task.CompletedTask;
+          })
+          .WithCancellation(cancellationToken);
 
-      // Subscribe to UntrappedSignal
-      try {
-        var subscribeTask = orchestrator.SubscribeAsync(args.SessionId, [SubscriptionEvent.UntrappedSignal], cancellationToken);
-        await subscribeTask;
-      } catch { }
-
-      // Poll facts
-      try {
-        var pollTask = orchestrator.PollFactsAsync(args.SessionId,
-          [FactType.Workspace, FactType.ThreadCount, FactType.Host, FactType.AccountInformation,
-           FactType.Threads, FactType.SuspendedThreads],
-          TimeSpan.FromSeconds(5), cancellationToken);
-        await pollTask;
-      } catch { }
-
+      builders[args.SessionId] = builder;
+      await builder.StartAsync();
     };
 
     orchestrator.ClientDisconnected += (args) => {
       servers.TryRemove(args.SessionId, out _);
       facts.TryRemove(args.SessionId, out _);
-      subscriptions.TryRemove(args.SessionId, out _);
+      recentEvents.TryRemove(args.SessionId, out _);
+      if (builders.TryRemove(args.SessionId, out var builder)) {
+        // No explicit stop needed; WithCancellation handles it
+      }
       return Task.CompletedTask;
     };
 
-    //orchestrator.AddServer("127.0.0.1", 8080, "Server 1");
-    //orchestrator.AddServer("127.0.0.1", 8081, "Server 2");
     var listener = orchestrator.StartListenerAsync("0.0.0.0", 8080, cancellationToken).ContinueWith(t => {
       if (t.IsFaulted) {
         AnsiConsole.MarkupLine("[bold red]Failed to start listener:[/] " + t.Exception?.GetBaseException().Message);
@@ -127,68 +82,52 @@ class Program
       }
     }, cancellationToken);
 
-    // Live table display
     await AnsiConsole.Live(new Table()
-    .AddColumn("SessionId")
-    .AddColumn("Name")
-    .AddColumn("Host")
-    .AddColumn("Facts")
-    .AddColumn("Subscribed Events")
-    .AddColumn("Recent Events")
-).StartAsync(async ctx => {
-  try {
-    while (!cancellationToken.IsCancellationRequested) {
-      var table = new Table()
-          .AddColumn("SessionId")
-          .AddColumn("Name")
-          //          .AddColumn("Host")
-          .AddColumn("Facts");
-      //          .AddColumn("Subscribed Events")
-      //          .AddColumn("Recent Events");
+        .AddColumn("SessionId")
+        .AddColumn("Name")
+        .AddColumn("Facts")
+    ).StartAsync(async ctx => {
+      try {
+        while (!cancellationToken.IsCancellationRequested) {
+          var table = new Table()
+                  .AddColumn("SessionId")
+                  .AddColumn("Name")
+                  .AddColumn("Facts");
 
-      foreach (var (sessionId, (name, host)) in servers) {
-        // Render HostFact under SessionId if present
-        IRenderable sessionIdCell;
-        if (facts.TryGetValue(sessionId, out var sessionFacts) && sessionFacts.Host is not null) {
-          var grid = new Grid();
-          grid.AddColumn();
-          grid.AddRow(new Text(sessionId.ToString()));
-          grid.AddRow(RenderHostFactTable(sessionFacts.Host, host));
-          sessionIdCell = grid;
-        } else {
-          sessionIdCell = new Text(sessionId.ToString());
-        }
-        // Render only one fact table at a time, carousel style, using local modulo
-        IRenderable factCell;
-        if (facts.TryGetValue(sessionId, out sessionFacts)) {
-          factCell = RenderFactsTableCarousel(sessionFacts, _carouselStep);
-        } else {
-          factCell = new Text("");
-        }
+          foreach (var (sessionId, (name, host)) in servers) {
+            IRenderable sessionIdCell;
+            if (facts.TryGetValue(sessionId, out var sessionFacts) && sessionFacts.Host is not null) {
+              var grid = new Grid();
+              grid.AddColumn();
+              grid.AddRow(new Text(sessionId.ToString()));
+              grid.AddRow(RenderHostFactTable(sessionFacts.Host, host));
+              sessionIdCell = grid;
+            } else {
+              sessionIdCell = new Text(sessionId.ToString());
+            }
 
-        var subStr = subscriptions.TryGetValue(sessionId, out var subs)
-            ? string.Join(", ", subs)
-            : (recentEvents.TryGetValue(sessionId, out var recentEvList) && recentEvList.Any(e => e == "UntrappedSignal") ? "UntrappedSignal" : "");
-        var eventsStr = recentEvents.TryGetValue(sessionId, out var evList)
-            ? string.Join("\n", evList)
-            : "";
-        table.AddRow(sessionIdCell, new Text(name), factCell);
+            IRenderable factCell;
+            if (facts.TryGetValue(sessionId, out sessionFacts)) {
+              factCell = RenderFactsTableCarousel(sessionFacts, _carouselStep);
+            } else {
+              factCell = new Text("");
+            }
+
+            table.AddRow(sessionIdCell, new Text(name), factCell);
+          }
+
+          ctx.UpdateTarget(table);
+          _carouselStep++;
+          await Task.Delay(1000, cancellationToken);
+        }
+      } catch (TaskCanceledException) {
+        // Graceful exit on cancellation
       }
+    });
 
-      ctx.UpdateTarget(table);
-      _carouselStep++; // Just increment, let each session use modulo of its own available facts
-      await Task.Delay(1000, cancellationToken); // 1 second interval
-    }
-  } catch (TaskCanceledException) {
-    // Graceful exit on cancellation
-  }
-});
-
-    await eventTask;
     await orchestrator.DisposeAsync();
   }
 
-  // Helper to render facts as nested tables with minimal borders
   static IRenderable RenderFactsTable(SessionFacts facts)
   {
     var grid = new Grid();
@@ -255,10 +194,6 @@ class Program
     table.AddRow("Interpreter.IsUnicode", host.Interpreter.IsUnicode.ToString());
     table.AddRow("Interpreter.IsRuntime", host.Interpreter.IsRuntime.ToString());
     table.AddRow("Interpreter.SessionUUID", host.Interpreter.SessionUUID ?? "");
-    //table.AddRow("CommsLayer.Version", host.CommsLayer?.Version ?? "");
-    //table.AddRow("CommsLayer.Address", host.CommsLayer?.Address ?? "");
-    //table.AddRow("CommsLayer.Port4", host.CommsLayer?.Port4.ToString());
-    //table.AddRow("CommsLayer.Port6", host.CommsLayer?.Port6.ToString());
     table.AddRow("RIDE.Listening", host.RIDE.Listening.ToString());
     table.AddRow("RIDE.HTTPServer", host.RIDE.HTTPServer?.ToString() ?? "");
     table.AddRow("RIDE.Version", host.RIDE.Version ?? "");
@@ -340,10 +275,8 @@ class Program
     }
   }
 
-  // Helper to render only one fact table at a time, carousel style
   static IRenderable RenderFactsTableCarousel(SessionFacts facts, int step)
   {
-    // Order: Workspace, ThreadCount, Threads, SuspendedThreads, AccountInformation
     var tables = new List<IRenderable>();
     if (facts.Workspace is not null)
       tables.Add(RenderWorkspaceFactTable(facts.Workspace));
@@ -357,7 +290,6 @@ class Program
       tables.Add(RenderAccountInformationFactTable(facts.AccountInformation));
     if (tables.Count == 0)
       return new Text("");
-    // Carousel: show one table at a time, using local modulo
     var idx = step % tables.Count;
     return tables[idx];
   }

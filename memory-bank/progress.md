@@ -21,7 +21,8 @@ _Last reviewed: 2025-07-15 15:01 CEST_
 - Failed handshakes are robustly detected and cleaned up before consumer exposure.
 - Disposal and resource cleanup.
 - Consumer workflow example implemented in the console project.
-- Sample client documentation added at `docs/sample-client.md`.
+- Sample client and documentation refactored to use SessionMonitorBuilder for session management and state updates.
+- Sample client documentation updated at `docs/sample-client.md` to describe builder-based workflow.
 - Documentation reviewed and updated.
 
 ## What's Left to Build

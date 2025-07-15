@@ -77,6 +77,7 @@ This document outlines the tasks required to implement the `Dyalog.Hmon.Client` 
     - [x] Write integration tests for the `HmonOrchestrator` API.
 - [x] **Example Application**
     - [x] Implement the consumer workflow example in the `Dyalog.Hmon.Client.Console` project.
+    - [x] Refactor sample client and documentation to use the streamlined `SessionMonitorBuilder` API for session management and state updates.
 - [x] **Documentation**
     - [x] Review and update all documentation.
     - [x] Ensure the `README.md` is up-to-date.
