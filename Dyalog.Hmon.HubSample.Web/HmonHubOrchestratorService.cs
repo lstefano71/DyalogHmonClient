@@ -69,8 +69,12 @@ public class HmonHubOrchestratorService : IAsyncDisposable
     }
 
     // Connect to all configured servers
-    foreach (var server in _servers) {
-      _orchestrator.AddServer(server.Host, server.Port, server.Name);
+    if (_servers != null)
+    {
+      foreach (var server in _servers)
+      {
+        _orchestrator.AddServer(server.Host, server.Port, server.Name);
+      }
     }
 
     // Start event loop for unified event stream

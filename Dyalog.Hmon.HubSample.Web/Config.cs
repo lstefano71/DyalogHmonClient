@@ -1,33 +1,56 @@
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
+
 namespace Dyalog.Hmon.HubSample.Web;
 
 public record HmonServerConfig(
-    string Name,
-    string Host,
-    int Port
+    [Required] string Name,
+    [Required] string Host,
+    [Range(1, 65535)] int Port
 );
 
 public record PollListenerConfig(
-    string Ip,
-    int Port
+    [Required] string Ip,
+    [Range(1, 65535)] int Port
 );
 
 public record ApiConfig(
-    string Ip,
-    int Port
+    [Required] string Ip,
+    [Range(1, 65535)] int Port
 );
 
-public record HubSampleConfig(
-    List<HmonServerConfig> HmonServers,
-    PollListenerConfig? PollListener,
-    ApiConfig Api,
-    int? AutoShutdownSeconds = null,
-    string? LogLevel = null,
-    List<string>? PollFacts = null,
-    int? PollIntervalSeconds = null,
-    List<string>? EventSubscription = null,
-    int? EventHistorySize = null
-)
+
+public record HubSampleConfig
 {
-  public static string DefaultConfigFileName => "config.json";
-  public static string EnvVarName => "HMON_HUB_CONFIG";
+    [JsonPropertyName("hmonServers")]
+    public List<HmonServerConfig>? HmonServers { get; init; }
+
+    [JsonPropertyName("pollListener")]
+    public PollListenerConfig? PollListener { get; init; }
+
+    [JsonPropertyName("api")]
+    public ApiConfig? Api { get; init; }
+
+    [JsonPropertyName("autoShutdownSeconds")]
+    public int? AutoShutdownSeconds { get; init; }
+
+    [JsonPropertyName("logLevel")]
+    public string? LogLevel { get; init; }
+
+    [JsonPropertyName("pollFacts")]
+    public List<string>? PollFacts { get; init; }
+
+    [JsonPropertyName("pollIntervalSeconds")]
+    public int? PollIntervalSeconds { get; init; }
+
+    [JsonPropertyName("eventSubscription")]
+    public List<string>? EventSubscription { get; init; }
+
+    [JsonPropertyName("eventHistorySize")]
+    public int? EventHistorySize { get; init; }
+
+    public HubSampleConfig() { }
+
+    public static string DefaultConfigFileName => "config.json";
+    public static string EnvVarName => "HMON_HUB_CONFIG";
 }
