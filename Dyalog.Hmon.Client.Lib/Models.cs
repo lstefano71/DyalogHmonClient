@@ -129,7 +129,7 @@ public record RideInfo(
     int? Port6
 );
 
-public record AccountInformationFact(string UserIdentification, long ComputeTime, long ConnectTime, long KeyingTime) : Fact(2, "AccountInformation");
+public record AccountInformationFact(int UserIdentification, long ComputeTime, long ConnectTime, long KeyingTime) : Fact(2, "AccountInformation");
 public record WorkspaceFact(string WSID, long Available, long Used, long Compactions,
   long GarbageCollections, long GarbagePockets, long FreePockets, long UsedPockets,
   long Sediment, long Allocation, long AllocationHWM, long TrapReserveWanted,

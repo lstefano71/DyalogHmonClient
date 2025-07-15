@@ -13,6 +13,8 @@ class SessionFacts
   public ThreadCountFact? ThreadCount { get; set; }
   public HostFact? Host { get; set; }
   public AccountInformationFact? AccountInformation { get; set; }
+  public ThreadsFact? Threads { get; set; }
+  public SuspendedThreadsFact? SuspendedThreads { get; set; }
   // Add more fact types as needed
 }
 
@@ -57,6 +59,12 @@ class Program
                   case AccountInformationFact acc:
                     sessionFacts.AccountInformation = acc;
                     break;
+                  case ThreadsFact threads:
+                    sessionFacts.Threads = threads;
+                    break;
+                  case SuspendedThreadsFact sthreads:
+                    sessionFacts.SuspendedThreads = sthreads;
+                    break;
                     // Add more fact types as needed
                 }
               }
@@ -90,7 +98,10 @@ class Program
 
       // Poll facts
       try {
-        var pollTask = orchestrator.PollFactsAsync(args.SessionId, [FactType.Workspace, FactType.ThreadCount, FactType.Host], TimeSpan.FromSeconds(5), cancellationToken);
+        var pollTask = orchestrator.PollFactsAsync(args.SessionId,
+          [FactType.Workspace, FactType.ThreadCount, FactType.Host, FactType.AccountInformation,
+           FactType.Threads, FactType.SuspendedThreads],
+          TimeSpan.FromSeconds(5), cancellationToken);
         await pollTask;
       } catch { }
 
@@ -179,6 +190,10 @@ class Program
       grid.AddRow(RenderWorkspaceFactTable(facts.Workspace));
     if (facts.ThreadCount is not null)
       grid.AddRow(RenderThreadCountFactTable(facts.ThreadCount));
+    if (facts.Threads is not null)
+      grid.AddRow(RenderThreadsFactTable(facts.Threads));
+    if (facts.SuspendedThreads is not null)
+      grid.AddRow(RenderSuspendedThreadsFactTable(facts.SuspendedThreads));
     if (facts.AccountInformation is not null)
       grid.AddRow(RenderAccountInformationFactTable(facts.AccountInformation));
     return grid;
@@ -232,10 +247,10 @@ class Program
     table.AddRow("Interpreter.IsUnicode", host.Interpreter.IsUnicode.ToString());
     table.AddRow("Interpreter.IsRuntime", host.Interpreter.IsRuntime.ToString());
     table.AddRow("Interpreter.SessionUUID", host.Interpreter.SessionUUID ?? "");
-    table.AddRow("CommsLayer.Version", host.CommsLayer?.Version ?? "");
-    table.AddRow("CommsLayer.Address", host.CommsLayer?.Address ?? "");
-    table.AddRow("CommsLayer.Port4", host.CommsLayer?.Port4.ToString());
-    table.AddRow("CommsLayer.Port6", host.CommsLayer?.Port6.ToString());
+    //table.AddRow("CommsLayer.Version", host.CommsLayer?.Version ?? "");
+    //table.AddRow("CommsLayer.Address", host.CommsLayer?.Address ?? "");
+    //table.AddRow("CommsLayer.Port4", host.CommsLayer?.Port4.ToString());
+    //table.AddRow("CommsLayer.Port6", host.CommsLayer?.Port6.ToString());
     table.AddRow("RIDE.Listening", host.RIDE.Listening.ToString());
     table.AddRow("RIDE.HTTPServer", host.RIDE.HTTPServer?.ToString() ?? "");
     table.AddRow("RIDE.Version", host.RIDE.Version ?? "");
@@ -251,10 +266,56 @@ class Program
     table.Border(TableBorder.Simple);
     table.AddColumn(new TableColumn("[bold]AccountInformation[/]").LeftAligned());
     table.AddColumn(new TableColumn("").RightAligned());
-    table.AddRow("UserIdentification", acc.UserIdentification);
-    table.AddRow("ComputeTime", acc.ComputeTime.ToString());
-    table.AddRow("ConnectTime", acc.ConnectTime.ToString());
-    table.AddRow("KeyingTime", acc.KeyingTime.ToString());
+    table.AddRow("UserIdentification", acc.UserIdentification.ToString());
+    table.AddRow("ComputeTime", acc.ComputeTime.ToString("N0"));
+    table.AddRow("ConnectTime", acc.ConnectTime.ToString("N0"));
+    table.AddRow("KeyingTime", acc.KeyingTime.ToString("N0"));
+    return table;
+  }
+
+  static Table RenderThreadsFactTable(ThreadsFact threads)
+  {
+    var table = new Table();
+    table.Border(TableBorder.Simple);
+    table.AddColumn(new TableColumn("[bold]Threads[/]").LeftAligned());
+    table.AddColumn(new TableColumn("").RightAligned());
+    foreach (var t in threads.Values) {
+      table.AddRow($"TID {t.Tid}", $"State: {t.State}, Suspended: {t.Suspended}, Flags: {t.Flags}");
+      if (t.Stack != null) {
+        foreach (var s in t.Stack) {
+          table.AddRow("  Stack", $"Restricted: {s.Restricted}, Desc: {Markup.Escape(s.Description)}");
+        }
+      }
+      if (t.DMX != null) {
+        table.AddRow("  DMX", $"{t.DMX.EM}/{t.DMX.EN} {Markup.Escape(string.Join(' ', t.DMX.DM))}");
+      }
+      if (t.Exception != null) {
+        table.AddRow("  Exception", $"Msg: {t.Exception.Message}");
+      }
+    }
+    return table;
+  }
+
+  static Table RenderSuspendedThreadsFactTable(SuspendedThreadsFact threads)
+  {
+    var table = new Table();
+    table.Border(TableBorder.Simple);
+    table.AddColumn(new TableColumn("[bold]SuspendedThreads[/]").LeftAligned());
+    table.AddColumn(new TableColumn("").RightAligned());
+    foreach (var t in threads.Values) {
+      table.AddRow($"TID {t.Tid}", $"State: {t.State}, Suspended: {t.Suspended}, Flags: {t.Flags}");
+      if (t.Stack != null) {
+        foreach (var s in t.Stack) {
+          table.AddRow("  Stack", $"Restricted: {s.Restricted}, Desc: {Markup.Escape(s.Description)}");
+        }
+      }
+      if (t.DMX != null) {
+        table.AddRow("  DMX", $"Category: {t.DMX.Category}, EM: {t.DMX.EM}");
+      }
+      if (t.Exception != null) {
+        table.AddRow("  Exception", $"Msg: {Markup.Escape(t.Exception.Message)}");
+      }
+    }
     return table;
   }
 
