@@ -1,5 +1,7 @@
 using Dyalog.Hmon.Client.Lib;
+
 using Serilog;
+
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.IO.Pipelines;
@@ -7,8 +9,6 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
-using System.Threading;
-using System.Threading.Tasks;
 
 /// <summary>
 /// Represents a single HMON protocol connection, handling only HMON-specific parsing and dispatch.
@@ -124,7 +124,7 @@ internal class HmonConnection : IAsyncDisposable
 
       // Main message loop
       while (!ct.IsCancellationRequested) {
-        var message = await _hmonFramer.ReadNextMessageAsync(ParseAndDispatchMessageAsync, ct);        
+        var message = await _hmonFramer.ReadNextMessageAsync(ParseAndDispatchMessageAsync, ct);
       }
     } catch (OperationCanceledException) {
       _logger.Debug("StartProcessingAsync canceled for session {SessionId}", _sessionId);

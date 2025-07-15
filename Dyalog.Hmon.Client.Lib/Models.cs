@@ -108,50 +108,75 @@ public class FactJsonConverter : JsonConverter<Fact>
 public record HostFact(MachineInfo Machine, InterpreterInfo Interpreter, CommsLayerInfo? CommsLayer, RideInfo RIDE) : Fact(1, "Host");
 public record MachineInfo(string Name, string User, int PID, object Desc, int AccessLevel);
 
-[JsonConverter(typeof(InterpreterInfoConverter))]
-public record InterpreterInfo(string Version, int BitWidth, bool IsUnicode, bool IsRuntime, string? SessionUUID);
+
+public record InterpreterInfo(
+    string Version,
+    int BitWidth,
+    [property: JsonConverter(typeof(HMonBooleanConverter))] bool IsUnicode,
+    [property: JsonConverter(typeof(HMonBooleanConverter))] bool IsRuntime,
+    string? SessionUUID
+);
+
 public record CommsLayerInfo(string? Version, string? Address, int Port4, int Port6);
 
-[JsonConverter(typeof(RideInfoConverter))]
-public record RideInfo(bool Listening, bool? HTTPServer, string? Version, string? Address, int? Port4, int? Port6);
+
+public record RideInfo(
+    [property: JsonConverter(typeof(HMonBooleanConverter))] bool Listening,
+    [property: JsonConverter(typeof(HMonBooleanConverter))] bool? HTTPServer,
+    string? Version,
+    string? Address,
+    int? Port4,
+    int? Port6
+);
+
 public record AccountInformationFact(string UserIdentification, long ComputeTime, long ConnectTime, long KeyingTime) : Fact(2, "AccountInformation");
-public record WorkspaceFact(string WSID, long Available, long Used, long Compactions, long GarbageCollections, long GarbagePockets, long FreePockets, long UsedPockets, long Sediment, long Allocation, long AllocationHWM, long TrapReserveWanted, long TrapReserveActual) : Fact(3, "Workspace");
+public record WorkspaceFact(string WSID, long Available, long Used, long Compactions,
+  long GarbageCollections, long GarbagePockets, long FreePockets, long UsedPockets,
+  long Sediment, long Allocation, long AllocationHWM, long TrapReserveWanted,
+  long TrapReserveActual) : Fact(3, "Workspace");
 public record ThreadsFact(IEnumerable<ThreadInfo> Values) : Fact(4, "Threads");
 public record SuspendedThreadsFact(IEnumerable<ThreadInfo> Values) : Fact(5, "SuspendedThreads");
 public record ThreadCountFact(int Total, int Suspended) : Fact(6, "ThreadCount");
-public record ThreadInfo(int Tid, IEnumerable<StackInfo> Stack, bool Suspended, string State, string Flags, DmxInfo? DMX, ExceptionInfo? Exception);
-public record StackInfo(bool Restricted, string? Description);
+public record ThreadInfo(
+    int Tid,
+    IEnumerable<StackInfo> Stack,
+    [property: JsonConverter(typeof(HMonBooleanConverter))] bool Suspended,
+    string State,
+    string Flags,
+    DmxInfo? DMX,
+    ExceptionInfo? Exception
+);
+public record StackInfo(
+    [property: JsonConverter(typeof(HMonBooleanConverter))] bool Restricted,
+    string? Description
+);
 /// <summary>
 /// Represents ⎕DMX information for a thread, as per RFC 002 and protocol sample.
 /// </summary>
 public record DmxInfo(
-  /// <summary>0/1 in protocol, true if restricted, false otherwise.</summary>
-  int Restricted,
-  /// <summary>Category string.</summary>
-  string? Category,
-  /// <summary>DM: string[3] array.</summary>
-  string[]? DM,
-  /// <summary>EM: string (error message).</summary>
-  string? EM,
-  /// <summary>EN: integer (error number).</summary>
-  int? EN,
-  /// <summary>ENX: integer (extended error number).</summary>
-  int? ENX,
-  /// <summary>InternalLocation: string[] (was tuple (string, int)).</summary>
-  [property: JsonConverter(typeof(InternalLocationInfoConverter))] InternalLocationInfo? InternalLocation,
-  /// <summary>Vendor: string.</summary>
-  string? Vendor,
-  /// <summary>Message: string.</summary>
-  string? Message,
-  /// <summary>OSError: array [int, int, string].</summary>
-  object? OSError
+    [property: JsonConverter(typeof(HMonBooleanConverter))] bool Restricted,
+    string? Category,
+    string[]? DM,
+    string? EM,
+    int? EN,
+    int? ENX,
+    [property: JsonConverter(typeof(InternalLocationInfoConverter))] InternalLocationInfo? InternalLocation,
+    string? Vendor,
+    string? Message,
+    object? OSError
 );
-public record ExceptionInfo(bool Restricted, object? Source, string? StackTrace, string? Message);
+public record ExceptionInfo(
+    [property: JsonConverter(typeof(HMonBooleanConverter))] bool Restricted,
+    object? Source,
+    string? StackTrace,
+    string? Message
+);
 
 public record NotificationResponse(string? UID, EventInfo Event, long? Size, int? Tid, IEnumerable<StackInfo>? Stack, DmxInfo? DMX, ExceptionInfo? Exception);
 public record EventInfo(int ID, string Name);
 
-public record LastKnownStateResponse(string? UID, string TS, ActivityInfo? Activity, LocationInfo? Location, [property: JsonPropertyName("WS FULL")] WsFullInfo? WsFull);
+public record LastKnownStateResponse(string? UID, string TS, ActivityInfo? Activity,
+  LocationInfo? Location, [property: JsonPropertyName("WS FULL")] WsFullInfo? WsFull);
 public record ActivityInfo(int Code, string TS);
 public record LocationInfo(string Function, int Line, string TS);
 public record WsFullInfo(string TS);
@@ -198,169 +223,3 @@ public class InternalLocationInfoConverter : JsonConverter<InternalLocationInfo?
   }
 }
 
-public class InterpreterInfoConverter : JsonConverter<InterpreterInfo>
-{
-  public override InterpreterInfo? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-  {
-    if (reader.TokenType != JsonTokenType.StartObject)
-      throw new JsonException();
-
-    string? version = null;
-    int bitWidth = 0;
-    bool isUnicode = false;
-    bool isRuntime = false;
-    string? sessionUUID = null;
-
-    while (reader.Read()) {
-      if (reader.TokenType == JsonTokenType.EndObject)
-        break;
-
-      if (reader.TokenType != JsonTokenType.PropertyName)
-        throw new JsonException();
-
-      string propertyName = reader.GetString()!;
-      reader.Read();
-
-      switch (propertyName) {
-        case "Version":
-          version = reader.GetString();
-          break;
-        case "BitWidth":
-          bitWidth = reader.GetInt32();
-          break;
-        case "IsUnicode":
-          isUnicode = reader.TokenType switch {
-            JsonTokenType.True => true,
-            JsonTokenType.False => false,
-            JsonTokenType.Number => reader.GetInt32() != 0,
-            _ => throw new JsonException()
-          };
-          break;
-        case "IsRuntime":
-          isRuntime = reader.TokenType switch {
-            JsonTokenType.True => true,
-            JsonTokenType.False => false,
-            JsonTokenType.Number => reader.GetInt32() != 0,
-            _ => throw new JsonException()
-          };
-          break;
-        case "SessionUUID":
-          sessionUUID = reader.TokenType == JsonTokenType.Null ? null : reader.GetString();
-          break;
-        default:
-          reader.Skip();
-          break;
-      }
-    }
-
-    if (version == null)
-      throw new JsonException("Missing Version property for InterpreterInfo");
-
-    return new InterpreterInfo(version, bitWidth, isUnicode, isRuntime, sessionUUID);
-  }
-
-  public override void Write(Utf8JsonWriter writer, InterpreterInfo value, JsonSerializerOptions options)
-  {
-    writer.WriteStartObject();
-    writer.WriteString("Version", value.Version);
-    writer.WriteNumber("BitWidth", value.BitWidth);
-    writer.WriteBoolean("IsUnicode", value.IsUnicode);
-    writer.WriteBoolean("IsRuntime", value.IsRuntime);
-    if (value.SessionUUID != null)
-      writer.WriteString("SessionUUID", value.SessionUUID);
-    else
-      writer.WriteNull("SessionUUID");
-    writer.WriteEndObject();
-  }
-}
-
-public class RideInfoConverter : JsonConverter<RideInfo>
-{
-  public override RideInfo? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-  {
-    if (reader.TokenType != JsonTokenType.StartObject)
-      throw new JsonException();
-
-    bool listening = false;
-    bool? httpServer = null;
-    string? version = null;
-    string? address = null;
-    int? port4 = null;
-    int? port6 = null;
-
-    while (reader.Read()) {
-      if (reader.TokenType == JsonTokenType.EndObject)
-        break;
-
-      if (reader.TokenType != JsonTokenType.PropertyName)
-        throw new JsonException();
-
-      string propertyName = reader.GetString()!;
-      reader.Read();
-
-      switch (propertyName) {
-        case "Listening":
-          listening = reader.TokenType switch {
-            JsonTokenType.True => true,
-            JsonTokenType.False => false,
-            JsonTokenType.Number => reader.GetInt32() != 0,
-            _ => throw new JsonException()
-          };
-          break;
-        case "HTTPServer":
-          httpServer = reader.TokenType switch {
-            JsonTokenType.True => true,
-            JsonTokenType.False => false,
-            JsonTokenType.Number => reader.GetInt32() != 0,
-            JsonTokenType.Null => (bool?)null,
-            _ => throw new JsonException()
-          };
-          break;
-        case "Version":
-          version = reader.TokenType == JsonTokenType.Null ? null : reader.GetString();
-          break;
-        case "Address":
-          address = reader.TokenType == JsonTokenType.Null ? null : reader.GetString();
-          break;
-        case "Port4":
-          port4 = reader.TokenType == JsonTokenType.Null ? null : reader.GetInt32();
-          break;
-        case "Port6":
-          port6 = reader.TokenType == JsonTokenType.Null ? null : reader.GetInt32();
-          break;
-        default:
-          reader.Skip();
-          break;
-      }
-    }
-
-    return new RideInfo(listening, httpServer, version, address, port4, port6);
-  }
-
-  public override void Write(Utf8JsonWriter writer, RideInfo value, JsonSerializerOptions options)
-  {
-    writer.WriteStartObject();
-    writer.WriteBoolean("Listening", value.Listening);
-    if (value.HTTPServer.HasValue)
-      writer.WriteBoolean("HTTPServer", value.HTTPServer.Value);
-    else
-      writer.WriteNull("HTTPServer");
-    if (value.Version != null)
-      writer.WriteString("Version", value.Version);
-    else
-      writer.WriteNull("Version");
-    if (value.Address != null)
-      writer.WriteString("Address", value.Address);
-    else
-      writer.WriteNull("Address");
-    if (value.Port4.HasValue)
-      writer.WriteNumber("Port4", value.Port4.Value);
-    else
-      writer.WriteNull("Port4");
-    if (value.Port6.HasValue)
-      writer.WriteNumber("Port6", value.Port6.Value);
-    else
-      writer.WriteNull("Port6");
-    writer.WriteEndObject();
-  }
-}

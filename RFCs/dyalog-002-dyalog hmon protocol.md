@@ -39,6 +39,9 @@ All HMON messages are transported as the payload of a DRP-T frame. The payload M
 1. A `MessageName` (String) that identifies the command or response.
 2. An `Arguments` (Object) that contains key-value pairs specific to the message.
 
+> **Warning:**  
+> All boolean properties in HMON JSON payloads MUST be serialized as integers: `0` for `false` and `1` for `true`. Implementers should ensure this convention is followed to maintain compatibility with the protocol.
+
 Example: `["MessageName", {"arg1": "value1", "arg2": 123}]`
 
 All message and argument names are case-sensitive.

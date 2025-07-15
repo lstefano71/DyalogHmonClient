@@ -103,3 +103,6 @@ After the handshake is successfully completed, all subsequent communication MUST
 ```json
 ["CommandName",{"key1":"value1","key2":222}]
 ```
+
+**Boolean Serialization:**  
+All boolean properties within JSON payloads MUST be serialized as integers and deserialized from integers: `0` for `false` and `1` for `true`. This ensures consistent interpretation of boolean values across different implementations and platforms.

@@ -36,8 +36,11 @@ The RIDE protocol operates exclusively over a Dyalog Remote Protocol - Transport
 
 All RIDE messages are transported as the payload of a DRP-T frame. The payload MUST be a UTF-8 encoded JSON array containing exactly two elements:
 
-1.A `MessageName` (String) that identifies the command or response.
-2.An `Arguments` (Object) that contains key-value pairs specific to the message.
+1. A `MessageName` (String) that identifies the command or response.
+2. An `Arguments` (Object) that contains key-value pairs specific to the message.
+
+> **Warning:**  
+> All boolean properties in RIDE JSON payloads MUST be serialized as integers: `0` for `false` and `1` for `true`. Implementers should ensure this convention is followed to maintain compatibility with the protocol.
 
 Example: `["CommandName", {"arg1": "value1", "arg2": 123}]`
 

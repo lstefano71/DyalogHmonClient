@@ -3,8 +3,6 @@ using Serilog;
 using System.Buffers;
 using System.IO.Pipelines;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace Dyalog.Hmon.Client.Lib
 {
@@ -136,21 +134,18 @@ namespace Dyalog.Hmon.Client.Lib
 
     public async Task<TResult> ReadNextMessageAsync<TResult>(Func<ReadOnlySequence<byte>, TResult> process, CancellationToken ct)
     {
-        while (true)
-        {
-            ReadResult result = await _reader.ReadAsync(ct);
-            ReadOnlySequence<byte> buffer = result.Buffer;
-            if (TryReadMessage(ref buffer, out var message))
-            {
-                var resultValue = process(message);
-                _reader.AdvanceTo(buffer.Start, buffer.End);
-                return resultValue;
-            }
-            if (result.IsCompleted && buffer.IsEmpty)
-            {
-                throw new EndOfStreamException("No more data available in the stream.");
-            }
+      while (true) {
+        ReadResult result = await _reader.ReadAsync(ct);
+        ReadOnlySequence<byte> buffer = result.Buffer;
+        if (TryReadMessage(ref buffer, out var message)) {
+          var resultValue = process(message);
+          _reader.AdvanceTo(buffer.Start, buffer.End);
+          return resultValue;
         }
+        if (result.IsCompleted && buffer.IsEmpty) {
+          throw new EndOfStreamException("No more data available in the stream.");
+        }
+      }
     }
 
     public static bool SequenceEqualsString(ReadOnlySequence<byte> sequence, string value)

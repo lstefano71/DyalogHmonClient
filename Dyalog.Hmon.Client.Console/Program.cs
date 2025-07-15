@@ -6,15 +6,14 @@ using Spectre.Console.Rendering;
 
 using System.Collections.Concurrent;
 using System.Globalization;
-using System.Reflection;
 
 class SessionFacts
 {
-    public WorkspaceFact? Workspace { get; set; }
-    public ThreadCountFact? ThreadCount { get; set; }
-    public HostFact? Host { get; set; }
-    public AccountInformationFact? AccountInformation { get; set; }
-    // Add more fact types as needed
+  public WorkspaceFact? Workspace { get; set; }
+  public ThreadCountFact? ThreadCount { get; set; }
+  public HostFact? Host { get; set; }
+  public AccountInformationFact? AccountInformation { get; set; }
+  // Add more fact types as needed
 }
 
 class Program
@@ -58,7 +57,7 @@ class Program
                   case AccountInformationFact acc:
                     sessionFacts.AccountInformation = acc;
                     break;
-                  // Add more fact types as needed
+                    // Add more fact types as needed
                 }
               }
               break;
@@ -128,24 +127,21 @@ class Program
       var table = new Table()
           .AddColumn("SessionId")
           .AddColumn("Name")
-//          .AddColumn("Host")
+          //          .AddColumn("Host")
           .AddColumn("Facts");
-//          .AddColumn("Subscribed Events")
-//          .AddColumn("Recent Events");
+      //          .AddColumn("Subscribed Events")
+      //          .AddColumn("Recent Events");
 
       foreach (var (sessionId, (name, host)) in servers) {
         // Render HostFact under SessionId if present
         IRenderable sessionIdCell;
-        if (facts.TryGetValue(sessionId, out var sessionFacts) && sessionFacts.Host is not null)
-        {
+        if (facts.TryGetValue(sessionId, out var sessionFacts) && sessionFacts.Host is not null) {
           var grid = new Grid();
           grid.AddColumn();
           grid.AddRow(new Text(sessionId.ToString()));
           grid.AddRow(RenderHostFactTable(sessionFacts.Host, host));
           sessionIdCell = grid;
-        }
-        else
-        {
+        } else {
           sessionIdCell = new Text(sessionId.ToString());
         }
         // Render facts as nested tables by category (excluding HostFact)

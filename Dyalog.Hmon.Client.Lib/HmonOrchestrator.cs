@@ -4,7 +4,6 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Channels;
-using System.Threading.Tasks;
 
 namespace Dyalog.Hmon.Client.Lib;
 
@@ -248,12 +247,12 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
       return; // Already disposed
 
     foreach (var server in _servers.Values) {
-        await server.DisposeAsync();
+      await server.DisposeAsync();
     }
     _servers.Clear();
 
     foreach (var connection in _connections.Values) {
-        await connection.DisposeAsync();
+      await connection.DisposeAsync();
     }
     _connections.Clear();
 
