@@ -1,8 +1,20 @@
 # Active Context: Dyalog.Hmon.Client
 
-_Last reviewed: 2025-07-15 15:01 CEST_
+_Last reviewed: 2025-07-15 15:58 CEST_
 
 ## Current Focus
+- HMon Hub Sample: HMon orchestrator integration, real-time fact aggregation, and WebSocket endpoint for real-time event/fact updates implemented.
+- REST API endpoints (/facts, /status) now reflect live data (when HMon servers are available).
+- Auto-shutdown, config loader, and Serilog logging are complete.
+- Event subscription and per-session event history (configurable) implemented.
+- Events are sent immediately through the websocket with timestamp and payload.
+- Error handling improvements in progress.
+
+## Next Steps
+- Finalize error handling and connection status reporting.
+- Update memory bank and TODO.md after WebSocket and error handling are implemented.
+
+## Previous Focus
 - HmonOrchestrator interaction API (GetFactsAsync, GetLastKnownStateAsync, PollFactsAsync, StopFactsPollingAsync, BumpFactsAsync, SubscribeAsync, ConnectRideAsync, DisconnectRideAsync) implemented.
 - Handshake protocol and connection validation now implemented as per RFCs.
 - Finalizing reliability (testing retry logic, robust error handling, state management).
@@ -33,4 +45,4 @@ _Last reviewed: 2025-07-15 15:01 CEST_
 - Add XML documentation.
 - Write and run unit/integration tests.
 
-_Memory bank fully reviewed and confirmed up to date as of 2025-07-15 15:01 CEST._
+_Memory bank fully reviewed and updated as of 2025-07-15 17:31 CEST._

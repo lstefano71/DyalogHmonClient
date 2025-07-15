@@ -1,9 +1,9 @@
 namespace Dyalog.Hmon.Client.Lib;
 
-public class SessionMonitorBuilder
+public class SessionMonitorBuilder(HmonOrchestrator orchestrator, Guid sessionId)
 {
-  private readonly HmonOrchestrator _orchestrator;
-  private readonly Guid _sessionId;
+  private readonly HmonOrchestrator _orchestrator = orchestrator;
+  private readonly Guid _sessionId = sessionId;
   private readonly List<SubscriptionEvent> _subscriptions = [];
   private readonly List<FactType> _pollFacts = [];
   private TimeSpan? _pollInterval;
@@ -11,12 +11,6 @@ public class SessionMonitorBuilder
   private Func<Fact, Task>? _onFactChanged;
   private Func<HmonEvent, Task>? _onEvent;
   private CancellationToken _cancellationToken = CancellationToken.None;
-
-  public SessionMonitorBuilder(HmonOrchestrator orchestrator, Guid sessionId)
-  {
-    _orchestrator = orchestrator;
-    _sessionId = sessionId;
-  }
 
   public SessionMonitorBuilder SubscribeTo(params SubscriptionEvent[] events)
   {

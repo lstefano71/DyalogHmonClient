@@ -1,6 +1,6 @@
 # Progress: Dyalog.Hmon.Client
 
-_Last reviewed: 2025-07-15 15:01 CEST_
+_Last reviewed: 2025-07-15 15:58 CEST_
 
 ## Current Status
 - Core infrastructure and foundational models are implemented.
@@ -8,6 +8,7 @@ _Last reviewed: 2025-07-15 15:01 CEST_
 - Transparent HMON protocol handshake logic is implemented and validated for all connections.
 - JSON serialization and source generation are configured.
 - Many core API and event models are implemented and tested.
+- **HMon Hub Sample implementation:** configuration-driven console app, .NET 9.0, C# 13, ASP.NET Core Minimal API, Serilog, in-memory aggregation, REST/WebSocket APIs, robust error handling, extensible logging, event subscription, per-session event history, and WebSocket endpoint for real-time event/fact updates.
 
 ## What Works
 - Project setup and structure (solution, library, console, and test projects).
@@ -26,6 +27,17 @@ _Last reviewed: 2025-07-15 15:01 CEST_
 - Documentation reviewed and updated.
 
 ## What's Left to Build
+- HMon Hub Sample:
+  - Create new console app project.
+  - Implement configuration model and loader (support CLI/env overrides).
+  - Set up Serilog logging (console, extensible).
+  - Implement HMon server connectivity and poll listener.
+  - Build in-memory aggregation of facts.
+  - Implement REST API endpoints (/facts, /status) using ASP.NET Core Minimal API.
+  - Implement WebSocket endpoint (/ws) for real-time event/fact updates.
+  - Add robust error handling and reconnection logic.
+  - Write unit/integration tests and documentation.
+  - Update memory bank and TODO.md as progress is made.
 - Reliability: test handshake, interaction API, connection retry logic, error handling, and state management.
 - Usability: add XML documentation to all public APIs.
 - Testability: write and run unit and integration tests for all core logic.
