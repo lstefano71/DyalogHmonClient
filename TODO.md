@@ -75,8 +75,8 @@ This document outlines the tasks required to implement the `Dyalog.Hmon.Client` 
 - [x] **Testability**
     - [x] Write unit tests for all core logic.
     - [x] Write integration tests for the `HmonOrchestrator` API.
-- [ ] **Example Application**
-    - [ ] Implement the consumer workflow example in the `Dyalog.Hmon.Client.Console` project.
-- [ ] **Documentation**
-    - [ ] Review and update all documentation.
-    - [ ] Ensure the `README.md` is up-to-date.
+- [x] **Example Application**
+    - [x] Implement the consumer workflow example in the `Dyalog.Hmon.Client.Console` project.
+- [x] **Documentation**
+    - [x] Review and update all documentation.
+    - [x] Ensure the `README.md` is up-to-date.

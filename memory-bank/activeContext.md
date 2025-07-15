@@ -1,6 +1,6 @@
 # Active Context: Dyalog.Hmon.Client
 
-_Last reviewed: 2025-07-14 23:20 CEST_
+_Last reviewed: 2025-07-15 15:01 CEST_
 
 ## Current Focus
 - HmonOrchestrator interaction API (GetFactsAsync, GetLastKnownStateAsync, PollFactsAsync, StopFactsPollingAsync, BumpFactsAsync, SubscribeAsync, ConnectRideAsync, DisconnectRideAsync) implemented.
@@ -8,8 +8,6 @@ _Last reviewed: 2025-07-14 23:20 CEST_
 - Finalizing reliability (testing retry logic, robust error handling, state management).
 - Adding comprehensive XML documentation to all public APIs.
 - Writing unit and integration tests for core logic and orchestrator API.
-- Implementing the consumer workflow example in the console project.
-- Reviewing and updating all documentation, including README.md.
 
 ## Recent Changes
 - Unit tests implemented for HmonOrchestrator, HmonConnection, and ServerConnection (construction, disposal, error handling).
@@ -24,12 +22,13 @@ _Last reviewed: 2025-07-14 23:20 CEST_
 - Core concepts, configuration models, enumerations, lifecycle event arguments, unified data event stream models, and HMON message payload models implemented.
 - JSON serialization configured with System.Text.Json and source generation.
 - HmonOrchestrator constructor, connection management (listener, AddServer, RemoveServerAsync), event handling, and disposal implemented.
+- Consumer workflow example implemented in the console project.
+- Sample client documentation added at `docs/sample-client.md`.
+- Documentation reviewed and updated.
 
 ## Next Steps
 - Thoroughly test handshake, interaction API, and connection reliability, including error/failure scenarios.
 - Add XML documentation.
 - Write and run unit/integration tests.
-- Implement example application.
-- Finalize and review documentation.
 
-_Memory bank fully reviewed and confirmed up to date as of 2025-07-14 23:20 CEST._
+_Memory bank fully reviewed and confirmed up to date as of 2025-07-15 15:01 CEST._

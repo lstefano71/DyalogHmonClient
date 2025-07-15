@@ -1,6 +1,6 @@
 # Progress: Dyalog.Hmon.Client
 
-_Last reviewed: 2025-07-14 23:20 CEST_
+_Last reviewed: 2025-07-15 15:01 CEST_
 
 ## Current Status
 - Core infrastructure and foundational models are implemented.
@@ -20,13 +20,14 @@ _Last reviewed: 2025-07-14 23:20 CEST_
 - Serilog logging for connection attempts, failures, and error diagnostics in ServerConnection and HmonConnection.
 - Failed handshakes are robustly detected and cleaned up before consumer exposure.
 - Disposal and resource cleanup.
+- Consumer workflow example implemented in the console project.
+- Sample client documentation added at `docs/sample-client.md`.
+- Documentation reviewed and updated.
 
 ## What's Left to Build
 - Reliability: test handshake, interaction API, connection retry logic, error handling, and state management.
 - Usability: add XML documentation to all public APIs.
 - Testability: write and run unit and integration tests for all core logic.
-- Example application: implement consumer workflow in the console project.
-- Documentation: review and update all documentation, including README.md.
 
 ## Known Issues
 - Reliability and error handling require thorough testing.
@@ -36,4 +37,4 @@ _Last reviewed: 2025-07-14 23:20 CEST_
 - Implementation follows PRD and memory bank best practices.
 - Tasks and progress are tracked in TODO.md and reflected here for accuracy.
 
-_Memory bank fully reviewed and confirmed up to date as of 2025-07-14 23:20 CEST._
+_Memory bank fully reviewed and confirmed up to date as of 2025-07-15 15:01 CEST._
