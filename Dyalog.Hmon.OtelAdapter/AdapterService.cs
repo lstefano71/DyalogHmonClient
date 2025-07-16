@@ -157,13 +157,19 @@ public class AdapterService : BackgroundService, IAsyncDisposable
         _orchestrator.AddServer(server.Host, server.Port, server.Name);
         Log.Information("Added HMON server: {Host}:{Port} ({Name})", server.Host, server.Port, server.Name ?? "");
       } catch (Exception ex) {
-        var logAttributes = new Dictionary<string, object> {
-          ["event.name"] = "ConnectionFailed",
-          ["net.peer.name"] = server.Host,
-          ["net.peer.port"] = server.Port,
-          ["error.message"] = ex.Message
-        };
-        Log.Error(ex, "Failed to connect to HMON server {Attributes}", logAttributes);
+        _otelLogger.LogError(ex,
+          "Failed to connect to HMON server {event.name} {net.peer.name} {net.peer.port}",
+          "ConnectionFailed",
+          server.Host,
+          server.Port
+        );
+
+        Log.Error(ex,
+          "Failed to connect to HMON server {event.name} {net.peer.name} {net.peer.port}",
+          "ConnectionFailed",
+          server.Host,
+          server.Port
+        );
       }
     }
 
@@ -176,7 +182,24 @@ public class AdapterService : BackgroundService, IAsyncDisposable
         ["service.name"] = _adapterConfig.ServiceName,
         ["session.id"] = args.SessionId.ToString()
       };
-      Log.Error("HMON client disconnected {Attributes}", logAttributes);
+      _otelLogger.LogError("HMON client disconnected {event.name} {net.peer.name} {net.peer.port} {error.message} {service.name} {session.id}",
+        "ClientDisconnected",
+        args.Host,
+        args.Port,
+        args.Reason,
+        _adapterConfig.ServiceName,
+          args.SessionId
+        );
+
+      Log.Error("HMON client disconnected {event.name} {net.peer.name} {net.peer.port} {error.message} {service.name} {session.id}",
+        "ClientDisconnected",
+        args.Host,
+        args.Port,
+        args.Reason,
+        _adapterConfig.ServiceName,
+          args.SessionId
+        );
+
       await Task.CompletedTask;
     };
 
@@ -285,24 +308,34 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     switch (notificationEvent.Notification.Event.Name) {
       case "UntrappedSignal":
       case "TrappedSignal":
-        // Fetch thread details for enrichment
-        //var threadsFact = await _orchestrator!.GetFactsAsync(sessionId, [FactType.Threads], stoppingToken);
+        var dmx = notificationEvent.Notification.DMX;
+        logAttributes["dmx.restricted"] = dmx.Restricted;
+        logAttributes["dmx.category"] = dmx.Category;
+        logAttributes["dmx.dm"] = dmx.DM;
+        logAttributes["dmx.em"] = dmx.EM;
+        logAttributes["dmx.en"] = dmx.EN;
+        logAttributes["dmx.enx"] = dmx.ENX;
+        logAttributes["dmx.internal_location"] = dmx.InternalLocation;
+        logAttributes["dmx.vendor"] = dmx.Vendor;
+        logAttributes["dmx.message"] = dmx.Message;
+        logAttributes["dmx.os_error"] = dmx.OSError;
         _otelLogger.LogErrorWithContext(logAttributes,
-          "Event received {event.name} {dyalog.signal.dmx}, {dyalog.signal.stack}, {dyalog.signal.thread_info}",
-          notificationEvent.Notification.Event.Name,
-          notificationEvent.Notification.DMX,
-          notificationEvent.Notification.Stack,
-          notificationEvent.Notification.Tid);
+            "Event received {event.name} {dmx.category} '{dmx.message}' {dyalog.signal.stack} {dyalog.signal.thread_info}",
+            notificationEvent.Notification.Event.Name,
+            dmx?.Category,
+            dmx?.Message,
+            notificationEvent.Notification.Stack,
+            notificationEvent.Notification.Tid);
         break;
       case "WorkspaceResize":
         _otelLogger.LogInformationWithContext(logAttributes,
-          "Event received {event.name} {resize.new_size}",
-          notificationEvent.Notification.Event.Name,
-          notificationEvent.Notification.Size);
+            "Event received {event.name} {resize.new_size}",
+            notificationEvent.Notification.Event.Name,
+            notificationEvent.Notification.Size);
         break;
       default:
         _otelLogger.LogInformationWithContext(logAttributes,
-          "{event.name} event received", "Notification");
+            "{event.name} event received", "Notification");
         break;
     }
   }

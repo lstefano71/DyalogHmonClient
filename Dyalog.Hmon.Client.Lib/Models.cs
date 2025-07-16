@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Globalization;
 
 namespace Dyalog.Hmon.Client.Lib;
 
@@ -163,23 +164,47 @@ public record DmxInfo(
     [property: JsonConverter(typeof(InternalLocationInfoConverter))] InternalLocationInfo? InternalLocation,
     string? Vendor,
     string? Message,
-    object? OSError
+    [property: JsonConverter(typeof(OSErrorInfoJsonConverter))] OSErrorInfo? OSError
 );
 public record ExceptionInfo(
     [property: JsonConverter(typeof(HMonBooleanConverter))] bool Restricted,
     object? Source,
     string? StackTrace,
-    string? Message
+    string? Message,
+    [property: JsonConverter(typeof(OSErrorInfoJsonConverter))] OSErrorInfo? OSError
 );
 
 public record NotificationResponse(string? UID, EventInfo Event, long? Size, int? Tid, IEnumerable<StackInfo>? Stack, DmxInfo? DMX, ExceptionInfo? Exception);
 public record EventInfo(int ID, string Name);
 
-public record LastKnownStateResponse(string? UID, string TS, ActivityInfo? Activity,
-  LocationInfo? Location, [property: JsonPropertyName("WS FULL")] WsFullInfo? WsFull);
-public record ActivityInfo(int Code, string TS);
-public record LocationInfo(string Function, int Line, string TS);
-public record WsFullInfo(string TS);
+public record LastKnownStateResponse(
+    string? UID,
+    [property: JsonConverter(typeof(HmonTimestampConverter))] DateTime TS,
+    ActivityInfo? Activity,
+    LocationInfo? Location,
+    [property: JsonPropertyName("WS FULL")] WsFullInfo? WsFull
+);
+
+public record ActivityInfo(int Code, [property: JsonConverter(typeof(HmonTimestampConverter))] DateTime TS);
+public record LocationInfo(string Function, int Line, [property: JsonConverter(typeof(HmonTimestampConverter))] DateTime TS);
+public record WsFullInfo([property: JsonConverter(typeof(HmonTimestampConverter))] DateTime TS);
+
+public class HmonTimestampConverter : JsonConverter<DateTime>
+{
+    private const string Format = "yyyyMMdd'T'HHmmss.fff'Z'";
+    public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        var str = reader.GetString();
+        if (str is null)
+            throw new JsonException("Timestamp string is null");
+        return DateTime.ParseExact(str, Format, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
+    }
+
+    public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(value.ToUniversalTime().ToString(Format, CultureInfo.InvariantCulture));
+    }
+}
 
 public record SubscribedResponse(string? UID, IEnumerable<SubscriptionStatus> Events);
 public record SubscriptionStatus(int ID, string Name, int Value)
@@ -219,6 +244,41 @@ public class InternalLocationInfoConverter : JsonConverter<InternalLocationInfo?
     writer.WriteStartArray();
     writer.WriteStringValue(value.File);
     writer.WriteNumberValue(value.Line);
+    writer.WriteEndArray();
+  }
+}
+
+// OSErrorInfo: represents a 3-element tuple (int, int, string) from protocol
+public record OSErrorInfo(int Source, int Code, string Description);
+
+public class OSErrorInfoJsonConverter : JsonConverter<OSErrorInfo?>
+{
+  public override OSErrorInfo? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+  {
+    if (reader.TokenType == JsonTokenType.Null)
+      return null;
+    if (reader.TokenType != JsonTokenType.StartArray)
+      throw new JsonException("OSError must be a 3-element array");
+    reader.Read();
+    int source = reader.GetInt32();
+    reader.Read();
+    int code = reader.GetInt32();
+    reader.Read();
+    string? desc = reader.GetString();
+    reader.Read(); // EndArray
+    return new OSErrorInfo(source, code, desc ?? "");
+  }
+  public override void Write(Utf8JsonWriter writer, OSErrorInfo? value, JsonSerializerOptions options)
+  {
+    if (value == null)
+    {
+      writer.WriteNullValue();
+      return;
+    }
+    writer.WriteStartArray();
+    writer.WriteNumberValue(value.Source);
+    writer.WriteNumberValue(value.Code);
+    writer.WriteStringValue(value.Description);
     writer.WriteEndArray();
   }
 }

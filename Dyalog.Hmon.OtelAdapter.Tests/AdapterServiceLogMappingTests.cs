@@ -16,7 +16,7 @@ public class AdapterServiceLogMappingTests
         Tid: 99,
         Stack: [new StackInfo(false, "Main")],
         DMX: new DmxInfo(false, "Error", ["DM"], "EM", 1, 2, null, "Vendor", "Message", null),
-        Exception: new ExceptionInfo(false, "Source", "StackTrace", "ExceptionMessage")
+        Exception: new ExceptionInfo(false, "Source", "StackTrace", "ExceptionMessage", null)
     );
 
     var notificationEvent = new NotificationReceivedEvent(
