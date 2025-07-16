@@ -32,7 +32,7 @@ service:
     # Pipeline for metrics
     metrics:
       receivers: [otlp]
-      exporters: [debug]
+      exporters: [nop]
     # Pipeline for logs
     logs:
       receivers: [otlp]

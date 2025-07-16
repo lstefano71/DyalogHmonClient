@@ -1,7 +1,10 @@
 using Dyalog.Hmon.Client.Lib;
 
+using Google.Protobuf.WellKnownTypes;
+
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 using OpenTelemetry.Metrics;
 
@@ -51,9 +54,16 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     _adapterConfig = adapterConfig;
     _meter = new Meter(_adapterConfig.MeterName);
 
+    Serilog.Sinks.OpenTelemetry.OtlpProtocol protocol = Serilog.Sinks.OpenTelemetry.OtlpProtocol.Grpc;
+    if (!string.IsNullOrWhiteSpace(_adapterConfig.OtelExporter.Protocol)) {
+      System.Enum.TryParse(_adapterConfig.OtelExporter.Protocol, true, out protocol);
+    }
+
     _otelLoggerFactory = LoggerFactory.Create(builder => {
       builder.AddSerilog(new LoggerConfiguration()
-        .WriteTo.OpenTelemetry(endpoint: _adapterConfig.OtelExporter?.Endpoint)
+        .WriteTo.OpenTelemetry(
+        endpoint: _adapterConfig.OtelExporter?.Endpoint, 
+        protocol:  protocol)
         .CreateLogger());
     });
     _otelLogger = _otelLoggerFactory.CreateLogger("HmonToOtel");
