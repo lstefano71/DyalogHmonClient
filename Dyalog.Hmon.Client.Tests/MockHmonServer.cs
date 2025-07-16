@@ -2,8 +2,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Channels;
-using System.Threading.Tasks;
-using System.Collections.Generic;
 
 /// <summary>
 /// Extended mock HMON server for integration testing.
@@ -18,7 +16,7 @@ public class MockHmonServer : IDisposable
 
   public int Port { get; }
   public Channel<string> OutgoingMessages { get; } = Channel.CreateUnbounded<string>();
-  public List<string> ReceivedMessages { get; } = new();
+  public List<string> ReceivedMessages { get; } = [];
 
   public MockHmonServer(int port = 0)
   {
@@ -127,8 +125,7 @@ public class MockHmonServer : IDisposable
   /// </summary>
   private async Task SendScriptedMessagesAsync(NetworkStream stream, CancellationToken ct)
   {
-    await foreach (var message in OutgoingMessages.Reader.ReadAllAsync(ct))
-    {
+    await foreach (var message in OutgoingMessages.Reader.ReadAllAsync(ct)) {
       var payloadBytes = Encoding.UTF8.GetBytes(message);
       var totalLength = 8 + payloadBytes.Length;
       var lengthBytes = BitConverter.GetBytes(totalLength);
@@ -146,10 +143,8 @@ public class MockHmonServer : IDisposable
   /// </summary>
   private async Task ReceiveMessagesAsync(NetworkStream stream, CancellationToken ct)
   {
-    try
-    {
-      while (!ct.IsCancellationRequested)
-      {
+    try {
+      while (!ct.IsCancellationRequested) {
         var lengthBytes = new byte[4];
         await ReadExactAsync(stream, lengthBytes, ct);
         if (BitConverter.IsLittleEndian) Array.Reverse(lengthBytes);
@@ -167,9 +162,7 @@ public class MockHmonServer : IDisposable
         ReceivedMessages.Add(payload);
         Console.WriteLine($"MockHmonServer: Received message: {payload}");
       }
-    }
-    catch (Exception ex)
-    {
+    } catch (Exception ex) {
       Console.WriteLine($"MockHmonServer: ReceiveMessagesAsync exception: {ex.Message}");
     }
   }

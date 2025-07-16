@@ -1,0 +1,40 @@
+# OpenTelemetry Collector Configuration (Corrected)
+
+# 1. Receivers: This section defines how data comes into the Collector.
+# We will use the OTLP receiver, which can handle traces, metrics, and logs.
+receivers:
+  otlp:
+    protocols:
+      # Enable the gRPC endpoint on the standard port 4317
+      grpc:
+      # Enable the HTTP endpoint on the standard port 4318
+      http:
+
+# 2. Processors: This section is for processing data. For this simple case,
+# we don't need any processors, so this section is omitted.
+
+# 3. Exporters: This section defines where the data is sent.
+# We will use the 'debug' exporter to print the data to the console.
+exporters:
+  debug:
+    # You can adjust the verbosity to 'detailed' to see more information.
+    verbosity: detailed
+  nop:
+
+# 4. Service: This section enables the configured components and defines the pipelines.
+# A pipeline consists of receivers, optional processors, and exporters.
+service:
+  pipelines:
+    # Pipeline for traces
+    traces:
+      receivers: [otlp]
+      exporters: [debug] # Changed from 'logging' to 'debug'
+    # Pipeline for metrics
+    metrics:
+      receivers: [otlp]
+      exporters: [debug] # Changed from 'logging' to 'debug'
+    # Pipeline for logs
+    logs:
+      receivers: [otlp]
+      exporters: [nop] # Changed from 'logging' to 'debug'
+

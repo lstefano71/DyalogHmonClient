@@ -1,14 +1,13 @@
 {
   "hmonServers": [
     {
-      "host": "127.0.0.1",
-      "port": 4502,
-      "name": "HmonServer1"
+      "ip": "127.0.0.1",
+      "port": 4502
     }
   ],
   "pollListener": {
     "ip": "0.0.0.0",
-    "port": 4503
+    "port": 4501
   },
   "api": {
     "ip": "0.0.0.0",

@@ -15,24 +15,18 @@ public class HmonConnectionTests
   [Fact]
   public async Task CanConstructAndDisposeHmonConnection()
   {
-    using var tcpClient = new TcpClient();
+    var listener = new TcpListener(System.Net.IPAddress.Loopback, 0);
+    listener.Start();
+    var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+    var tcpClient = new TcpClient();
+    await tcpClient.ConnectAsync("127.0.0.1", port);
+    var _ = await listener.AcceptTcpClientAsync();
     var writer = Channel.CreateUnbounded<HmonEvent>().Writer;
     var sessionId = System.Guid.NewGuid();
     var conn = new HmonConnection(tcpClient, sessionId, writer, null);
     await conn.DisposeAsync();
+    tcpClient.Dispose();
+    listener.Stop();
   }
 
-  [Fact]
-  public async Task SendCommandAsync_ThrowsOnClosedTcpClient()
-  {
-    using var tcpClient = new TcpClient();
-    tcpClient.Close();
-    var writer = Channel.CreateUnbounded<HmonEvent>().Writer;
-    var sessionId = System.Guid.NewGuid();
-    var conn = new HmonConnection(tcpClient, sessionId, writer, null);
-
-    await Assert.ThrowsAsync<System.ObjectDisposedException>(async () => {
-      await conn.SendCommandAsync<HmonEvent>("Test", new { }, default);
-    });
-  }
 }

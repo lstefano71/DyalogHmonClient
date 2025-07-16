@@ -1,0 +1,14 @@
+{
+  "ServiceName": "TestAdapter",
+  "HmonServers": [
+    {
+      "Host": "127.0.0.1",
+      "Port": 4502,
+      "Name": "TestServer"
+    }
+  ],
+  "OtelExporter": {
+    "Endpoint": "http://localhost:4317"
+  },
+  "LogLevel": "Information"
+}

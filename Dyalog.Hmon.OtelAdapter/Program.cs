@@ -1,8 +1,12 @@
 ﻿using Dyalog.Hmon.OtelAdapter;
+
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+
+// Serilog OpenTelemetry sink
 using Serilog;
+
 using Spectre.Console;
 
 // Modern C# 13 top-level async entry point
@@ -17,6 +21,7 @@ var logLevel = config["LogLevel"] ?? "Information";
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Is(Enum.TryParse<Serilog.Events.LogEventLevel>(logLevel, true, out var lvl) ? lvl : Serilog.Events.LogEventLevel.Information)
     .WriteTo.Console()
+    .WriteTo.OpenTelemetry(endpoint: config["OtelExporter:Endpoint"])
     .CreateLogger();
 
 AnsiConsole.MarkupLine("[bold green]HMON-to-OTEL Adapter starting...[/]");
@@ -31,8 +36,7 @@ var host = Host.CreateDefaultBuilder(args)
     .Build();
 
 using var cts = new CancellationTokenSource();
-Console.CancelKeyPress += (sender, eventArgs) =>
-{
+Console.CancelKeyPress += (sender, eventArgs) => {
   Log.Information("Ctrl+C pressed, shutting down...");
   eventArgs.Cancel = true;
   cts.Cancel();

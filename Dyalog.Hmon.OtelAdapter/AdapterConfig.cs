@@ -14,6 +14,11 @@ public record AdapterConfig
   public OtelExporterConfig OtelExporter { get; init; } = new();
 
   public string? LogLevel { get; init; } = "Information";
+
+  /// <summary>
+  /// Polling interval for facts in milliseconds. Default: 1000ms.
+  /// </summary>
+  public int PollingIntervalMs { get; init; } = 1000;
 }
 
 public record HmonServerConfig

@@ -31,20 +31,56 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     AnsiConsole.MarkupLine("[bold blue]AdapterService running.[/]");
 
     _adapterConfig = LoadAndValidateConfig();
-    if (_adapterConfig == null) {
+    if (_adapterConfig == null)
+    {
       return;
     }
 
     Log.Debug("Loaded configuration: {@AdapterConfig}", _adapterConfig);
+    Log.Information("OTLP Endpoint: {Endpoint}", _adapterConfig.OtelExporter?.Endpoint ?? "(null)");
 
-    _orchestrator = new Dyalog.Hmon.Client.Lib.HmonOrchestrator();
+    _orchestrator = new HmonOrchestrator();
     _telemetryFactory = new TelemetryFactory(_adapterConfig);
 
-    foreach (var server in _adapterConfig.HmonServers) {
-      try {
+    _orchestrator.ClientConnected += async args =>
+    {
+      // WARNING: If FactType enum changes, update this list accordingly.
+
+      var pollingInterval = TimeSpan.FromMilliseconds(_adapterConfig?.PollingIntervalMs ?? 1000);
+
+      await _orchestrator.PollFactsAsync(args.SessionId,
+      [
+        FactType.Host,
+        FactType.AccountInformation,
+        FactType.Workspace,
+        FactType.Threads,
+        FactType.SuspendedThreads,
+        FactType.ThreadCount
+      ], pollingInterval);
+      Log.Information("Started polling for FactTypes: {FactTypes} on session {SessionId} with interval {Interval}ms", string.Join(",",
+      [
+        FactType.Host,
+        FactType.AccountInformation,
+        FactType.Workspace,
+        FactType.Threads,
+        FactType.SuspendedThreads,
+        FactType.ThreadCount
+      ]), args.SessionId, pollingInterval.TotalMilliseconds);
+
+      // Subscribe to all events for the session
+      await _orchestrator.SubscribeAsync(args.SessionId, [SubscriptionEvent.All]);
+      Log.Information("Subscribed to all events on session {SessionId}", args.SessionId);
+    };
+
+    foreach (var server in _adapterConfig.HmonServers)
+    {
+      try
+      {
         _orchestrator.AddServer(server.Host, server.Port, server.Name);
         Log.Information("Added HMON server: {Host}:{Port} ({Name})", server.Host, server.Port, server.Name ?? "");
-      } catch (Exception ex) {
+      }
+      catch (Exception ex)
+      {
         var logAttributes = new Dictionary<string, object>
         {
           ["event.name"] = "ConnectionFailed",
@@ -61,7 +97,8 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     _meter = new Meter("HMON");
     _instrumentCache = [];
 
-    _orchestrator.ClientDisconnected += async args => {
+    _orchestrator.ClientDisconnected += async args =>
+    {
       var logAttributes = new Dictionary<string, object>
       {
         ["event.name"] = "ClientDisconnected",
@@ -115,7 +152,8 @@ public class AdapterService : BackgroundService, IAsyncDisposable
 
     // Extract session ID from factsEvent if available (assume factsEvent.SessionId exists)
     var sessionId = factsEvent.SessionId != Guid.Empty ? factsEvent.SessionId.ToString() : "default";
-    if (!_sessionMeterProviders.ContainsKey(sessionId)) {
+    if (!_sessionMeterProviders.ContainsKey(sessionId))
+    {
       var hostFact = factsEvent.Facts.Facts.OfType<HostFact>().FirstOrDefault();
       var accFact = factsEvent.Facts.Facts.OfType<AccountInformationFact>().FirstOrDefault();
 
@@ -124,22 +162,25 @@ public class AdapterService : BackgroundService, IAsyncDisposable
                 new("service.name", _adapterConfig?.ServiceName ?? "HMON-to-OTEL Adapter")
             };
 
-      if (hostFact != null) {
+      if (hostFact != null)
+      {
         attributes.Add(new KeyValuePair<string, object>("host.name", hostFact.Machine.Name ?? ""));
         attributes.Add(new KeyValuePair<string, object>("host.user", hostFact.Machine.User ?? ""));
         attributes.Add(new KeyValuePair<string, object>("host.pid", hostFact.Machine.PID));
       }
-      if (accFact != null) {
+      if (accFact != null)
+      {
         attributes.Add(new KeyValuePair<string, object>("user.id", accFact.UserIdentification));
-        attributes.Add(new KeyValuePair<string, object>("account.compute_time", accFact.ComputeTime));
-        attributes.Add(new KeyValuePair<string, object>("account.connect_time", accFact.ConnectTime));
-        attributes.Add(new KeyValuePair<string, object>("account.keying_time", accFact.KeyingTime));
       }
 
       var meterName = "HMON-" + sessionId;
       var meterProvider = Sdk.CreateMeterProviderBuilder()
           .ConfigureResource(r => r.AddAttributes(attributes))
           .AddMeter(meterName)
+          .AddOtlpExporter(options =>
+          {
+            options.Endpoint = new Uri(_adapterConfig?.OtelExporter?.Endpoint ?? "http://localhost:4317");
+          })
           .Build();
 
       _sessionMeterProviders[sessionId] = meterProvider;
@@ -149,10 +190,12 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     var meterNameForSession = "HMON-" + sessionId;
     var meterForSession = new Meter(meterNameForSession, null);
 
-    foreach (var fact in factsEvent.Facts.Facts) {
+    foreach (var fact in factsEvent.Facts.Facts)
+    {
       Log.Debug("Mapping fact: {FactType}", fact.GetType().Name);
 
-      if (fact is HostFact hostFact) {
+      if (fact is HostFact hostFact)
+      {
         var metricName = "host.pid";
         var value = hostFact.Machine.PID;
         var tags = new List<KeyValuePair<string, object>>
@@ -161,13 +204,16 @@ public class AdapterService : BackgroundService, IAsyncDisposable
                     new("user", hostFact.Machine.User ?? "")
                 };
 
-        if (!_instrumentCache.TryGetValue(metricName, out var instrument)) {
+        if (!_instrumentCache.TryGetValue(metricName, out var instrument))
+        {
           instrument = meterForSession.CreateObservableGauge<int>(metricName, () => value, description: "Host PID");
           _instrumentCache[metricName] = instrument;
         }
 
         Log.Information("Recording metric {MetricName}: {Value} [{Tags}]", metricName, value, string.Join(",", tags.Select(t => $"{t.Key}={t.Value}")));
-      } else if (fact is WorkspaceFact wsFact) {
+      }
+      else if (fact is WorkspaceFact wsFact)
+      {
         var workspaceMetrics = new[]
         {
                     ("workspace.available", wsFact.Available, "Workspace Available"),
@@ -178,38 +224,46 @@ public class AdapterService : BackgroundService, IAsyncDisposable
                     ("workspace.free_pockets", wsFact.FreePockets, "Workspace Free Pockets"),
                     ("workspace.used_pockets", wsFact.UsedPockets, "Workspace Used Pockets")
                 };
-        foreach (var (metricName, value, description) in workspaceMetrics) {
+        foreach (var (metricName, value, description) in workspaceMetrics)
+        {
           var tags = new List<KeyValuePair<string, object>>
           {
                         new("wsid", wsFact.WSID ?? "")
                     };
 
-          if (!_instrumentCache.TryGetValue(metricName, out var instrument)) {
+          if (!_instrumentCache.TryGetValue(metricName, out var instrument))
+          {
             instrument = _meter.CreateObservableGauge<long>(metricName, () => value, description: description);
             _instrumentCache[metricName] = instrument;
           }
 
           Log.Information("Recording metric {MetricName}: {Value} [{Tags}]", metricName, value, string.Join(",", tags.Select(t => $"{t.Key}={t.Value}")));
         }
-      } else if (fact is AccountInformationFact accFact) {
+      }
+      else if (fact is AccountInformationFact accFact)
+      {
         var metrics = new[]
         {
                     ("account.compute_time", accFact.ComputeTime, "Compute Time"),
                     ("account.connect_time", accFact.ConnectTime, "Connect Time"),
                     ("account.keying_time", accFact.KeyingTime, "Keying Time")
                 };
-        foreach (var (metricName, value, description) in metrics) {
+        foreach (var (metricName, value, description) in metrics)
+        {
           var tags = new List<KeyValuePair<string, object>>
           {
                         new("user_id", accFact.UserIdentification)
                     };
-          if (!_instrumentCache.TryGetValue(metricName, out var instrument)) {
+          if (!_instrumentCache.TryGetValue(metricName, out var instrument))
+          {
             instrument = _meter.CreateObservableGauge<long>(metricName, () => value, description: description);
             _instrumentCache[metricName] = instrument;
           }
           Log.Information("Recording metric {MetricName}: {Value} [{Tags}]", metricName, value, string.Join(",", tags.Select(t => $"{t.Key}={t.Value}")));
         }
-      } else if (fact is HostFact hostFact2) {
+      }
+      else if (fact is HostFact hostFact2)
+      {
         var interp = hostFact2.Interpreter;
         var metricName = "interpreter.version";
         var tags = new List<KeyValuePair<string, object>>
@@ -217,26 +271,32 @@ public class AdapterService : BackgroundService, IAsyncDisposable
                     new("version", interp.Version ?? "")
                 };
         Log.Information("Interpreter version: {Version} [{Tags}]", interp.Version, string.Join(",", tags.Select(t => $"{t.Key}={t.Value}")));
-      } else if (fact is HostFact hostFact3 && hostFact3.CommsLayer is not null) {
+      }
+      else if (fact is HostFact hostFact3 && hostFact3.CommsLayer is not null)
+      {
         var comms = hostFact3.CommsLayer;
         var metrics = new[]
         {
                     ("commslayer.port4", comms.Port4, "CommsLayer IPv4 Port"),
                     ("commslayer.port6", comms.Port6, "CommsLayer IPv6 Port")
                 };
-        foreach (var (metricName, value, description) in metrics) {
+        foreach (var (metricName, value, description) in metrics)
+        {
           var tags = new List<KeyValuePair<string, object>>
           {
                         new("address", comms.Address ?? ""),
                         new("version", comms.Version ?? "")
                     };
-          if (!_instrumentCache.TryGetValue(metricName, out var instrument)) {
+          if (!_instrumentCache.TryGetValue(metricName, out var instrument))
+          {
             instrument = _meter.CreateObservableGauge<int>(metricName, () => value, description: description);
             _instrumentCache[metricName] = instrument;
           }
           Log.Information("Recording metric {MetricName}: {Value} [{Tags}]", metricName, value, string.Join(",", tags.Select(t => $"{t.Key}={t.Value}")));
         }
-      } else if (fact is HostFact hostFact4 && hostFact4.RIDE is not null) {
+      }
+      else if (fact is HostFact hostFact4 && hostFact4.RIDE is not null)
+      {
         var ride = hostFact4.RIDE;
         var metricName = "ride.listening";
         var value = ride.Listening ? 1 : 0;
@@ -244,7 +304,8 @@ public class AdapterService : BackgroundService, IAsyncDisposable
         {
                     new("ride", "listening")
                 };
-        if (!_instrumentCache.TryGetValue(metricName, out var instrument)) {
+        if (!_instrumentCache.TryGetValue(metricName, out var instrument))
+        {
           instrument = _meter.CreateObservableGauge<int>(metricName, () => value, description: "RIDE Listening");
           _instrumentCache[metricName] = instrument;
         }
@@ -276,7 +337,7 @@ public class AdapterService : BackgroundService, IAsyncDisposable
       if (notif.Tid.HasValue)
       {
         Log.Debug("Fetching ThreadsFact for Tid={Tid}", notif.Tid.Value);
-        var facts = await _orchestrator.GetFactsAsync(notificationEvent.SessionId, new[] { FactType.Threads }, stoppingToken);
+        var facts = await _orchestrator.GetFactsAsync(notificationEvent.SessionId, [FactType.Threads], stoppingToken);
         var threadsFact = facts.Facts.OfType<ThreadsFact>().FirstOrDefault();
         var threadInfo = threadsFact?.Values.FirstOrDefault(t => t.Tid == notif.Tid.Value);
 
@@ -334,7 +395,8 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     var adapterConfig = config.Get<AdapterConfig>();
     var validationContext = new ValidationContext(adapterConfig ?? new AdapterConfig());
     var validationResults = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
-    if (adapterConfig == null || !Validator.TryValidateObject(adapterConfig, validationContext, validationResults, true)) {
+    if (adapterConfig == null || !Validator.TryValidateObject(adapterConfig, validationContext, validationResults, true))
+    {
       Log.Error("Configuration validation failed: {Errors}", string.Join("; ", validationResults.Select(r => r.ErrorMessage)));
       AnsiConsole.MarkupLine("[bold red]Configuration validation failed.[/]");
       return null;
