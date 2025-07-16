@@ -319,6 +319,9 @@ public class AdapterService : BackgroundService, IAsyncDisposable
         logAttributes["dmx.vendor"] = dmx.Vendor;
         logAttributes["dmx.message"] = dmx.Message;
         logAttributes["dmx.os_error"] = dmx.OSError;
+        logAttributes["dmx.os_error.source"] = dmx.OSError.Source;
+        logAttributes["dmx.os_error.code"] = dmx.OSError.Code;
+        logAttributes["dmx.os_error.description"] = dmx.OSError.Description;
         _otelLogger.LogErrorWithContext(logAttributes,
             "Event received {event.name} {dmx.category} '{dmx.message}' {dyalog.signal.stack} {dyalog.signal.thread_info}",
             notificationEvent.Notification.Event.Name,
