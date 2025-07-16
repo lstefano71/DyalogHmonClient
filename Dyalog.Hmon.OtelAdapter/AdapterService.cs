@@ -4,8 +4,6 @@ using Dyalog.Hmon.OtelAdapter.Logging;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-using OpenTelemetry.Metrics;
-
 using Serilog;
 
 using Spectre.Console;
@@ -456,7 +454,7 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     if (_orchestrator is not null)
       await _orchestrator.DisposeAsync();
     _meter?.Dispose();
-    
+
     _telemetryFactory?.MeterProvider?.Dispose();
   }
 }

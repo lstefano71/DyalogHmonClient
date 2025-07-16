@@ -4,8 +4,17 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Dyalog.Hmon.OtelAdapter;
 
+/// <summary>
+/// Validates <see cref="AdapterConfig"/> instances for required fields and custom rules.
+/// </summary>
 public class AdapterConfigValidator : IValidateOptions<AdapterConfig>
 {
+  /// <summary>
+  /// Validates the specified <see cref="AdapterConfig"/> instance for correctness and completeness.
+  /// </summary>
+  /// <param name="name">The name of the options instance being validated.</param>
+  /// <param name="config">The configuration instance to validate.</param>
+  /// <returns>A <see cref="ValidateOptionsResult"/> indicating success or failure.</returns>
   public ValidateOptionsResult Validate(string? name, AdapterConfig config)
   {
     var validationResults = new List<ValidationResult>();
@@ -26,10 +35,6 @@ public class AdapterConfigValidator : IValidateOptions<AdapterConfig>
     // Custom: OtelExporter.Endpoint must be a non-empty string
     if (string.IsNullOrWhiteSpace(config.OtelExporter?.Endpoint))
       return ValidateOptionsResult.Fail("'OtelExporter.Endpoint' is required and must be a non-empty string.");
-
-    // Custom: PollingIntervalMs must be positive
-    if (config.PollingIntervalMs <= 0)
-      return ValidateOptionsResult.Fail("'PollingIntervalMs' must be a positive integer.");
 
     // Custom: Each HmonServerConfig must have valid Host
     foreach (var server in config.HmonServers) {

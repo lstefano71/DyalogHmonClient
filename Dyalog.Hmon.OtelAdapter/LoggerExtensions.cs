@@ -34,6 +34,9 @@ namespace Dyalog.Hmon.OtelAdapter.Logging
 
     // --- Helper Methods for Each Log Level ---
 
+    /// <summary>
+    /// Logs an information message with a temporary scope from the provided context properties.
+    /// </summary>
     public static void LogInformationWithContext(
         this ILogger logger,
         IDictionary<string, object> contextProperties,
@@ -43,6 +46,9 @@ namespace Dyalog.Hmon.OtelAdapter.Logging
       logger.LogWithContext(LogLevel.Information, contextProperties, message, args);
     }
 
+    /// <summary>
+    /// Logs a warning message with a temporary scope from the provided context properties.
+    /// </summary>
     public static void LogWarningWithContext(
         this ILogger logger,
         IDictionary<string, object> contextProperties,
@@ -52,6 +58,9 @@ namespace Dyalog.Hmon.OtelAdapter.Logging
       logger.LogWithContext(LogLevel.Warning, contextProperties, message, args);
     }
 
+    /// <summary>
+    /// Logs a debug message with a temporary scope from the provided context properties.
+    /// </summary>
     public static void LogDebugWithContext(
         this ILogger logger,
         IDictionary<string, object> contextProperties,
@@ -61,6 +70,9 @@ namespace Dyalog.Hmon.OtelAdapter.Logging
       logger.LogWithContext(LogLevel.Debug, contextProperties, message, args);
     }
 
+    /// <summary>
+    /// Logs a trace message with a temporary scope from the provided context properties.
+    /// </summary>
     public static void LogTraceWithContext(
         this ILogger logger,
         IDictionary<string, object> contextProperties,
@@ -72,6 +84,9 @@ namespace Dyalog.Hmon.OtelAdapter.Logging
 
     // --- Overloads for Handling Exceptions ---
 
+    /// <summary>
+    /// Logs an error message with an exception and a temporary scope from the provided context properties.
+    /// </summary>
     public static void LogErrorWithContext(
         this ILogger logger,
         Exception exception,
@@ -83,6 +98,9 @@ namespace Dyalog.Hmon.OtelAdapter.Logging
       logger.LogError(exception, message, args);
     }
 
+    /// <summary>
+    /// Logs an error message with a temporary scope from the provided context properties.
+    /// </summary>
     public static void LogErrorWithContext(
         this ILogger logger,
         IDictionary<string, object> contextProperties,
@@ -92,6 +110,9 @@ namespace Dyalog.Hmon.OtelAdapter.Logging
       logger.LogWithContext(LogLevel.Error, contextProperties, message, args);
     }
 
+    /// <summary>
+    /// Logs a critical message with an exception and a temporary scope from the provided context properties.
+    /// </summary>
     public static void LogCriticalWithContext(
         this ILogger logger,
         Exception exception,
@@ -103,6 +124,9 @@ namespace Dyalog.Hmon.OtelAdapter.Logging
       logger.LogCritical(exception, message, args);
     }
 
+    /// <summary>
+    /// Logs a critical message with a temporary scope from the provided context properties.
+    /// </summary>
     public static void LogCriticalWithContext(
         this ILogger logger,
         IDictionary<string, object> contextProperties,
