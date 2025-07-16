@@ -10,7 +10,7 @@ This repository contains several related projects and documentation for differen
 - [`Dyalog.Hmon.Client.Console`](docs/sample-client.md): Sample console application for live monitoring of Dyalog APL sessions.
 - [`Dyalog.Hmon.HubSample.Web`](docs/hmon-hub-sample.md): Configuration-driven hub app with REST API and WebSocket endpoints for real-time fact/event updates and aggregation.
 - [`Dyalog.Hmon.OtelAdapter`](docs/hmon_to_otel_adapter.md): **NEW!** Adapter for exporting HMON facts and events to OpenTelemetry metrics and logs (see below).
-- [`Dyalog.Hmon.Client.Tests`](docs/hmonclient-api-guide.md): Unit and integration tests for the library.
+- [`Dyalog.Hmon.Client.Tests`](docs/hmonclient-api-guide.md): Unit and integration tests for the library. (**WARNING**: these tests are very bad. Don't rely on them)
 
 ## 📚 Documentation
 
