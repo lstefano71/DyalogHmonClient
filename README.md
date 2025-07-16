@@ -1,81 +1,49 @@
-# Dyalog.Hmon.Client
+# Dyalog.Hmon.Client Repository
 
-A .NET 9.0 library and sample client for monitoring and interacting with Dyalog APL servers using the HMON protocol.
+Welcome to the Dyalog.Hmon.Client monorepo, a .NET 9.0 suite for monitoring, orchestrating, and integrating Dyalog APL servers using the HMON protocol.
 
-## Overview
+This repository contains several related projects and documentation for different use cases:
 
-This repository provides:
-- `Dyalog.Hmon.Client.Lib`: A C# library implementing the HMON protocol for Dyalog APL server monitoring and orchestration.
-- `Dyalog.Hmon.Client.Console`: A sample console application demonstrating live monitoring of Dyalog APL sessions.
-- `Dyalog.Hmon.Client.Tests`: Unit and integration tests for the library.
-- **HMon Hub Sample**: Configuration-driven console app with REST API and WebSocket endpoints for real-time fact/event updates and aggregation.
+## 📦 Projects
 
-## Features
+- [`Dyalog.Hmon.Client.Lib`](docs/hmonclient-api-guide.md): Core C# library implementing the HMON protocol for Dyalog APL server monitoring and orchestration.
+- [`Dyalog.Hmon.Client.Console`](docs/sample-client.md): Sample console application for live monitoring of Dyalog APL sessions.
+- [`Dyalog.Hmon.HubSample.Web`](docs/hmon-hub-sample.md): Configuration-driven hub app with REST API and WebSocket endpoints for real-time fact/event updates and aggregation.
+- [`Dyalog.Hmon.OtelAdapter`](docs/hmon_to_otel_adapter.md): **NEW!** Adapter for exporting HMON facts and events to OpenTelemetry metrics and logs (see below).
+- [`Dyalog.Hmon.Client.Tests`](docs/hmonclient-api-guide.md): Unit and integration tests for the library.
 
-- Connection management and handshake protocol (see RFCs)
-- Unified event stream for session facts and notifications
-- Fact polling and subscription APIs
-- Robust error handling and reconnection logic
-- REST API endpoints (`/facts`, `/status`) for live data
-- WebSocket endpoint (`/ws`) for real-time event/fact updates
-- In-memory aggregation of facts
-- Per-session event history and event subscription
-- Logging with Serilog
-- Live terminal dashboard (Spectre.Console)
-- Comprehensive XML documentation
+## 📚 Documentation
 
-## Current Status
+- [Product Requirements Documents (PRDs)](docs/)
+  - [HMON Client PRD](docs/original%20prd/hmonclient-prd.md)
+  - [HMON Hub Sample PRD](docs/hmonhubsample-prd.md)
+  - [HMON to OpenTelemetry Adapter PRD](docs/hmon-to-otel-adapter-PRD.md)
+- [API Guide](docs/hmonclient-api-guide.md)
+- [Sample Client Usage](docs/sample-client.md)
+- [Hub Sample Usage](docs/hmon-hub-sample.md)
+- [HMON to OpenTelemetry Adapter Guide](docs/hmon_to_otel_adapter.md)
+- [General Usage Guide](docs/hmon-usage-guide.md)
+- [RFCs](RFCs/): Protocol specifications
 
-All major features are implemented:
-- HMon orchestrator, REST API, WebSocket, fact aggregation, error handling, logging, and configuration are complete.
-- Only unit/integration testing and documentation remain to be finalized.
+## 🆕 HMON to OpenTelemetry Adapter
 
-## Getting Started
+See [`docs/hmon_to_otel_adapter.md`](docs/hmon_to_otel_adapter.md) for a full overview, configuration, and usage guide for the new adapter that bridges Dyalog HMON monitoring to OpenTelemetry metrics/logs.
 
-1. **Build the Solution**
-   ```
-   dotnet build
-   ```
-
-2. **Run the Sample Client**
-   ```
-   dotnet run --project Dyalog.Hmon.Client.Console
-   ```
-   The client listens for incoming Dyalog HMON server connections (default port: 8080).
-
-3. **Run the HMon Hub Sample**
-   ```
-   dotnet run --project Dyalog.Hmon.HubSample.Web
-   ```
-   This exposes REST and WebSocket endpoints for real-time monitoring.
-
-4. **Connect a Dyalog HMON Server**
-   - Point your Dyalog APL server to the listening port.
-   - Monitor live session facts and events in the terminal UI or via API/WebSocket.
-
-## Documentation
-
-- [Product Requirements Document (PRD)](docs/hmonclient-prd.md)
-- [Sample Client Overview](docs/sample-client.md)
-- [HMon Hub Sample Documentation](docs/hmon-hub-sample.md)
-- [Usage Guide](docs/hmon-usage-guide.md)
-- RFCs: See `RFCs/` directory for protocol specifications.
-
-## Project Structure
+## 🗂️ Project Structure
 
 - `Dyalog.Hmon.Client.Lib/` — Core library
 - `Dyalog.Hmon.Client.Console/` — Sample client
 - `Dyalog.Hmon.HubSample.Web/` — Hub sample (REST/WebSocket)
+- `Dyalog.Hmon.OtelAdapter/` — HMON to OTEL adapter
 - `Dyalog.Hmon.Client.Tests/` — Tests
 - `docs/` — Documentation
 - `memory-bank/` — Project context and progress tracking
 - `RFCs/` — Protocol specifications
 
-## Requirements
+## 🚀 Getting Started
 
-- .NET 9.0 SDK or later
-- Dyalog APL server with HMON support
+See the individual project guides above for build and run instructions.
 
-## License
+## 📝 License
 
 [MIT](LICENSE)

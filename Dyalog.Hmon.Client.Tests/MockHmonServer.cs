@@ -1,10 +1,13 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading.Channels;
+using System.Threading.Tasks;
+using System.Collections.Generic;
 
 /// <summary>
-/// Minimal mock HMON server for integration testing.
-/// Accepts a single connection and performs the DRP-T handshake.
+/// Extended mock HMON server for integration testing.
+/// Accepts a single connection, performs the DRP-T handshake, and can inject scripted facts/events.
 /// </summary>
 public class MockHmonServer : IDisposable
 {
@@ -14,6 +17,8 @@ public class MockHmonServer : IDisposable
   private readonly CancellationTokenSource _cts = new();
 
   public int Port { get; }
+  public Channel<string> OutgoingMessages { get; } = Channel.CreateUnbounded<string>();
+  public List<string> ReceivedMessages { get; } = new();
 
   public MockHmonServer(int port = 0)
   {
@@ -42,6 +47,13 @@ public class MockHmonServer : IDisposable
         }
         // Handshake succeeded, exit loop
         Console.WriteLine("MockHmonServer: Handshake succeeded, exiting loop.");
+
+        // Start background task to send scripted messages
+        _ = Task.Run(() => SendScriptedMessagesAsync(_stream, _cts.Token), _cts.Token);
+
+        // Start background task to receive and record incoming messages
+        _ = Task.Run(() => ReceiveMessagesAsync(_stream, _cts.Token), _cts.Token);
+
         return;
       } catch (Exception ex) {
         Console.WriteLine($"MockHmonServer: Exception in AcceptAndHandshakeAsync: {ex.Message}");
@@ -99,6 +111,66 @@ public class MockHmonServer : IDisposable
         _client = null;
         await Task.Delay(200, ct);
       }
+    }
+  }
+
+  /// <summary>
+  /// Enqueue a scripted HMON message (JSON string) to be sent to the client.
+  /// </summary>
+  public void EnqueueMessage(string message)
+  {
+    OutgoingMessages.Writer.TryWrite(message);
+  }
+
+  /// <summary>
+  /// Background task: send scripted messages to the client.
+  /// </summary>
+  private async Task SendScriptedMessagesAsync(NetworkStream stream, CancellationToken ct)
+  {
+    await foreach (var message in OutgoingMessages.Reader.ReadAllAsync(ct))
+    {
+      var payloadBytes = Encoding.UTF8.GetBytes(message);
+      var totalLength = 8 + payloadBytes.Length;
+      var lengthBytes = BitConverter.GetBytes(totalLength);
+      if (BitConverter.IsLittleEndian) Array.Reverse(lengthBytes);
+      byte[] magic = [0x48, 0x4D, 0x4F, 0x4E];
+      await stream.WriteAsync(lengthBytes, ct);
+      await stream.WriteAsync(magic, ct);
+      await stream.WriteAsync(payloadBytes, ct);
+      Console.WriteLine($"MockHmonServer: Sent scripted message: {message}");
+    }
+  }
+
+  /// <summary>
+  /// Background task: receive and record incoming messages from the client.
+  /// </summary>
+  private async Task ReceiveMessagesAsync(NetworkStream stream, CancellationToken ct)
+  {
+    try
+    {
+      while (!ct.IsCancellationRequested)
+      {
+        var lengthBytes = new byte[4];
+        await ReadExactAsync(stream, lengthBytes, ct);
+        if (BitConverter.IsLittleEndian) Array.Reverse(lengthBytes);
+        int totalLength = BitConverter.ToInt32(lengthBytes, 0);
+
+        var magic = new byte[4];
+        await ReadExactAsync(stream, magic, ct);
+        if (!(magic[0] == 0x48 && magic[1] == 0x4D && magic[2] == 0x4F && magic[3] == 0x4E))
+          throw new InvalidOperationException("Invalid handshake magic number");
+
+        int payloadLen = totalLength - 8;
+        var payloadBytes = new byte[payloadLen];
+        await ReadExactAsync(stream, payloadBytes, ct);
+        var payload = Encoding.UTF8.GetString(payloadBytes);
+        ReceivedMessages.Add(payload);
+        Console.WriteLine($"MockHmonServer: Received message: {payload}");
+      }
+    }
+    catch (Exception ex)
+    {
+      Console.WriteLine($"MockHmonServer: ReceiveMessagesAsync exception: {ex.Message}");
     }
   }
 
