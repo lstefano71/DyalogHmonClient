@@ -1,8 +1,5 @@
 using Microsoft.Extensions.Logging;
 
-using System;
-using System.Collections.Generic;
-
 // Choose a namespace that makes sense for your project
 namespace Dyalog.Hmon.OtelAdapter.Logging
 {
