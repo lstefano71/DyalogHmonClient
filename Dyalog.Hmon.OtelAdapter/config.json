@@ -1,6 +1,10 @@
 {
   "PollingIntervalMs": 5000,
   "ServiceName": "TestAdapter",
+  "pollListener": {
+    "ip": "0.0.0.0",
+    "port": 4503
+  },
   "HmonServers": [
     {
       "Host": "127.0.0.1",

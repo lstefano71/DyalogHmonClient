@@ -96,7 +96,7 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
                     await ClientDisconnected.Invoke(new ClientDisconnectedEventArgs(sessionId, remoteEndPoint.Address.ToString(), remoteEndPoint.Port, null, "Remote client disconnected"));
                   }
                 },
-                (args) => { if (ClientConnected != null) return ClientConnected.Invoke(args); return Task.CompletedTask; } // Pass the ClientConnected event handler
+                (args) => { return ClientConnected != null ? ClientConnected.Invoke(args) : Task.CompletedTask; } // Pass the ClientConnected event handler
             );
             _connections.TryAdd(sessionId, connection);
 
@@ -209,7 +209,7 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   /// <param name="facts">Facts to poll.</param>
   /// <param name="interval">Polling interval.</param>
   /// <param name="ct">Cancellation token.</param>
-  public async Task PollFactsAsync(Guid sessionId, IEnumerable<FactType> facts, TimeSpan interval, CancellationToken ct = default)
+  public async Task<FactsReceivedEvent> PollFactsAsync(Guid sessionId, IEnumerable<FactType> facts, TimeSpan interval, CancellationToken ct = default)
   {
     if (!_connections.TryGetValue(sessionId, out var conn)) {
       var ex = new InvalidOperationException("Session not found");
@@ -218,7 +218,7 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
     }
     var payload = new PollFactsPayload([.. facts.Select(f => (int)f)], (int)interval.TotalMilliseconds);
     try {
-      await conn.SendCommandAsync<FactsReceivedEvent>("PollFacts", payload, ct);
+      return await conn.SendCommandAsync<FactsReceivedEvent>("PollFacts", payload, ct);
     } catch (Exception ex) {
       OnError?.Invoke(ex, sessionId);
       throw;
@@ -273,7 +273,7 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   /// <param name="sessionId">Session ID.</param>
   /// <param name="events">Events to subscribe to.</param>
   /// <param name="ct">Cancellation token.</param>
-  public async Task SubscribeAsync(Guid sessionId, IEnumerable<SubscriptionEvent> events, CancellationToken ct = default)
+  public async Task<SubscribedResponseReceivedEvent> SubscribeAsync(Guid sessionId, IEnumerable<SubscriptionEvent> events, CancellationToken ct = default)
   {
     if (!_connections.TryGetValue(sessionId, out var conn)) {
       var ex = new InvalidOperationException("Session not found");
@@ -282,7 +282,7 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
     }
     var payload = new SubscribePayload([.. events.Select(e => (int)e)]);
     try {
-      await conn.SendCommandAsync<SubscribedResponseReceivedEvent>("Subscribe", payload, ct);
+      return await conn.SendCommandAsync<SubscribedResponseReceivedEvent>("Subscribe", payload, ct);
     } catch (Exception ex) {
       OnError?.Invoke(ex, sessionId);
       throw;
@@ -366,9 +366,7 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   /// </summary>
   public T? GetFact<T>(Guid sessionId) where T : Fact
   {
-    if (_factCache.TryGetValue((sessionId, typeof(T)), out var entry))
-      return entry.Fact as T;
-    return null;
+    return _factCache.TryGetValue((sessionId, typeof(T)), out var entry) ? entry.Fact as T : null;
   }
 
   /// <summary>
@@ -376,9 +374,7 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   /// </summary>
   public Fact? GetFact(Guid sessionId, Type factType)
   {
-    if (_factCache.TryGetValue((sessionId, factType), out var entry))
-      return entry.Fact;
-    return null;
+    return _factCache.TryGetValue((sessionId, factType), out var entry) ? entry.Fact : null;
   }
 
   /// <summary>

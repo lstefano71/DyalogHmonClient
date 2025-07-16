@@ -195,9 +195,9 @@ public class HmonTimestampConverter : JsonConverter<DateTime>
   public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
   {
     var str = reader.GetString();
-    if (str is null)
-      throw new JsonException("Timestamp string is null");
-    return DateTime.ParseExact(str, Format, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
+    return str is null
+      ? throw new JsonException("Timestamp string is null")
+      : DateTime.ParseExact(str, Format, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
   }
 
   public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)

@@ -127,6 +127,9 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     }
 
     _orchestrator.ClientConnected += async args => {
+      _otelLogger.LogInformation("Session started {session.id} {net.peer.name} {net.peer.port}",
+        args.SessionId, args.Host, args.Port);
+
       var pollingInterval = TimeSpan.FromMilliseconds(_adapterConfig?.PollingIntervalMs ?? 1000);
       // WARNING: (DO NOT DELETE!) if the facts supported by the HMON server change, this list must be updated accordingly.
       FactType[] facts = [
@@ -180,7 +183,7 @@ public class AdapterService : BackgroundService, IAsyncDisposable
         ["net.peer.port"] = args.Port,
         ["error.message"] = args.Reason,
         ["service.name"] = _adapterConfig.ServiceName,
-        ["session.id"] = args.SessionId.ToString()
+        ["session.id"] = args.SessionId
       };
       _otelLogger.LogError("HMON client disconnected {event.name} {net.peer.name} {net.peer.port} {error.message} {service.name} {session.id}",
         "ClientDisconnected",

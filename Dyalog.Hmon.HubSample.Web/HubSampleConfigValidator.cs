@@ -24,9 +24,6 @@ public class HubSampleConfigValidator : IValidateOptions<HubSampleConfig>
       return ValidateOptionsResult.Fail("At least one of 'hmonServers' or 'pollListener' must be present.");
 
     // Custom: api is required
-    if (config.Api is null)
-      return ValidateOptionsResult.Fail("'api' section is required.");
-
-    return ValidateOptionsResult.Success;
+    return config.Api is null ? ValidateOptionsResult.Fail("'api' section is required.") : ValidateOptionsResult.Success;
   }
 }
