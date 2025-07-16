@@ -374,7 +374,17 @@ public class AdapterService : BackgroundService, IAsyncDisposable
 
   private void HandleUnknownEvent(object hmonEvent)
   {
-    // Stub implementation
+    var eventType = hmonEvent?.GetType().Name ?? "*unknown*";
+    Log.Warning("Received unknown HMON event type: {EventType} {@Event}", eventType, hmonEvent);
+
+    var logAttributes = new Dictionary<string, object>
+    {
+      ["service.name"] = _adapterConfig.ServiceName,
+      ["event.type"] = eventType,
+      ["event.payload"] = hmonEvent?.ToString() ?? "(null)"
+    };
+
+    _otelLogger.LogWarning("Unknown HMON event received {event.type} {event.payload}", eventType, hmonEvent?.ToString() ?? "(null)");
   }
 
   public async ValueTask DisposeAsync()
