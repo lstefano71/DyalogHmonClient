@@ -1,14 +1,13 @@
-# Active Context: Dyalog.Hmon.Client
+# Active Context: HMON-to-OTEL Adapter
 
-_Last reviewed: 2025-07-15 17:48 CEST_
+_Last reviewed: 2025-07-16 09:37 CEST_
 
 ## Current Focus
-- HMon Hub Sample: HMon orchestrator integration, real-time fact aggregation, WebSocket endpoint for real-time event/fact updates, and robust error handling are implemented.
-- REST API endpoints (/facts, /status) reflect live data (when HMon servers are available).
-- Auto-shutdown, config loader, and Serilog logging are complete.
-- Event subscription and per-session event history (configurable) implemented.
-- Events are sent immediately through the websocket with timestamp and payload.
-- Error handling and connection status reporting are finalized.
+- Project focus switched to hmon-to-otel-adapter.
+- Adapter design and implementation to translate HMON events and metrics to OpenTelemetry format.
+- Review and follow requirements in docs/hmon-to-otel-adapter-PRD.md.
+- All architectural and implementation decisions now reference the adapter PRD and TODO-hmonadapter.md.
+- Preferences for logging (Serilog), CLI (SpectreConsole), and embedded database (SQLite) remain unchanged.
 
 ## Next Steps
 - Thoroughly test handshake, interaction API, and connection reliability, including error/failure scenarios.

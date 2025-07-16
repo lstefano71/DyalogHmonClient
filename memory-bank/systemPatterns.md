@@ -1,18 +1,26 @@
-# System Patterns: Dyalog.Hmon.Client
+# System Patterns: HMON-to-OTEL Adapter
 
-_Last reviewed: 2025-07-14 16:48 CEST_
+_Last reviewed: 2025-07-16 09:38 CEST_
 
-## Architectural Overview
-- **Orchestrator-Centric Design:** The HmonOrchestrator is the central component, managing all HMON connections and exposing a unified event stream.
-- **Reactive Event Model:** All connection lifecycle events and data are delivered via a single IAsyncEnumerable<HmonEvent>, enabling asynchronous, event-driven consumption.
-- **Stable Session Identity:** Each managed connection is assigned a stable SessionId (Guid), ensuring reliable tracking across reconnects.
-- **Automatic Retry Logic:** Connections in SERVE mode are automatically retried using configurable policies for resilience.
-- **Strong Typing:** All protocol messages and events are represented by strongly-typed C# records and enums.
-- **Transparent Handshake Handling:** The library performs the HMON protocol handshake automatically and transparently when establishing connections in both POLL and SERVE modes. Consumers do not need to manage handshake logic; it is handled internally as part of connection setup.
+## Architecture
+- Adapter service runs as a standalone .NET process.
+- Connects to HMON event/metric streams via TCP/WebSocket.
+- Translates HMON protocol data to OpenTelemetry metrics and traces.
+- Forwards OTEL data to configured OTEL collector endpoints.
 
-## Key Patterns
-- **Unified Event Stream:** Consumers process all events from all sessions in a single loop, simplifying application logic.
-- **Separation of Concerns:** The orchestrator abstracts protocol and connection management, letting consumers focus on business logic.
-- **Extensibility:** The design supports future enhancements and integration with various monitoring tools.
+## Key Technical Decisions
+- Use Serilog for structured logging and diagnostics.
+- Use SpectreConsole for CLI interactions and configuration.
+- Use SQLite for optional local persistence or buffering.
+- Modular mapping layer for HMON-to-OTEL translation.
+- Resilient connection management and error handling.
 
-_Memory bank fully reviewed and confirmed up to date as of 2025-07-14 16:48 CEST._
+## Design Patterns
+- Adapter pattern for protocol translation.
+- Observer pattern for event stream handling.
+- Strategy pattern for configurable mapping/filtering.
+- Dependency injection for extensibility and testability.
+
+## Component Relationships
+- HMON connection manager → Event/metric stream processor → OTEL mapping layer → OTEL exporter.
+- Logging and diagnostics available at each stage.

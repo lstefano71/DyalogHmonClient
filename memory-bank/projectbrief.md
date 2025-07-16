@@ -1,24 +1,24 @@
-# Project Brief: Dyalog.Hmon.Client
+# Project Brief: HMON-to-OTEL Adapter
 
-_Last reviewed: 2025-07-14 16:48 CEST_
+_Last reviewed: 2025-07-16 09:38 CEST_
 
 ## Vision
-Deliver a high-quality, modern, and robust .NET library for managing communications with Dyalog APL interpreters via the Health Monitor (HMON) protocol. The library will enable the creation of advanced monitoring and diagnostic tools in C#.
+Deliver a robust, modern .NET adapter that translates Dyalog HMON protocol events and metrics into OpenTelemetry-compatible data, enabling seamless integration of APL monitoring into OTEL-based observability platforms.
 
 ## Purpose
-Dyalog.Hmon.Client abstracts the complexities of the HMON protocol, connection management, and data flow, providing a unified, reactive event stream for consumer applications. It is designed to simplify the development of tools that monitor multiple concurrent Dyalog HMON sessions.
+The HMON-to-OTEL Adapter abstracts the complexities of HMON event and metric formats, providing a reliable bridge to OpenTelemetry. It enables real-time monitoring, diagnostics, and analytics for Dyalog APL environments using industry-standard OTEL tools.
 
 ## Goals and Objectives
 
-- **Primary Goal:** Provide a session-management library that simplifies building applications monitoring multiple Dyalog HMON sessions.
+- **Primary Goal:** Provide an adapter that translates HMON events and metrics to OpenTelemetry format for ingestion by OTEL collectors and observability platforms.
 - **Key Objectives:**
-  - Unified session management via a central orchestrator.
-  - Resilient, automatically retried connections.
-  - Reactive event architecture with a unified, strongly-typed event stream.
-  - Stable session identity for reliable state tracking.
-  - Intuitive API for interacting with managed interpreters.
+  - Accurate mapping of HMON protocol data to OTEL metrics and traces.
+  - Real-time event forwarding with minimal latency.
+  - Configurable mapping and filtering of events/metrics.
+  - Resilient error handling and connection management.
+  - Easy integration into existing OTEL pipelines.
 
 ## Scope
-This project covers the Dyalog.Hmon.Client library only. Client applications (e.g., dashboards, CLI tools) are out of scope.
+This project covers the HMON-to-OTEL Adapter only. Client applications and HMON server implementations are out of scope.
 
-_Memory bank fully reviewed and confirmed up to date as of 2025-07-14 16:48 CEST._
+_Memory bank fully reviewed and confirmed up to date as of 2025-07-16 09:38 CEST._

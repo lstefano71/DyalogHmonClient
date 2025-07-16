@@ -1,21 +1,24 @@
-# Product Context: Dyalog.Hmon.Client
+# Product Context: HMON-to-OTEL Adapter
 
-_Last reviewed: 2025-07-14 16:48 CEST_
+_Last reviewed: 2025-07-16 09:38 CEST_
 
-## Problem Statement
-Developers building monitoring and diagnostic tools for Dyalog APL interpreters face complexity in managing multiple connections, handling protocol details, and ensuring robust, real-time data flow.
+## Why this project exists
+Modern observability platforms rely on OpenTelemetry for unified metrics and tracing. Dyalog APL environments use the HMON protocol for health and event monitoring, but lack direct integration with OTEL. The adapter bridges this gap, enabling organizations to monitor APL systems alongside other infrastructure using standard OTEL tools.
 
-## Solution Overview
-Dyalog.Hmon.Client provides a unified, orchestrator-based API that abstracts protocol and connection management, exposing all activity through a single, reactive event stream. This enables rapid development of reliable monitoring tools with minimal boilerplate.
+## Problems it solves
+- Lack of visibility of Dyalog APL environments in OTEL dashboards.
+- Manual, error-prone translation of HMON events/metrics to OTEL format.
+- Fragmented monitoring workflows for APL and non-APL systems.
+- Difficulty correlating APL events with broader system traces.
 
-## Intended Users
-- Developers building dashboards, logging services, and health-check utilities for Dyalog APL environments.
-- Teams requiring robust, scalable monitoring of multiple interpreters.
+## How it should work
+- Connects to HMON event/metric streams and translates them to OTEL metrics/traces.
+- Provides configurable mapping, filtering, and enrichment of events.
+- Forwards data in real-time to OTEL collectors or compatible endpoints.
+- Handles errors and connection issues gracefully.
 
-## User Experience Goals
-- Simple, intuitive API surface.
-- Minimal setup for managing multiple sessions.
-- Strongly-typed, asynchronous event handling.
-- Reliable session tracking and error handling.
-
-_Memory bank fully reviewed and confirmed up to date as of 2025-07-14 16:48 CEST._
+## User experience goals
+- Simple configuration and deployment.
+- Reliable, low-latency event forwarding.
+- Clear diagnostics and logging (Serilog).
+- Seamless integration with existing OTEL pipelines.

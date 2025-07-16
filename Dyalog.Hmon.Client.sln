@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dyalog.Hmon.Client.Tests", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dyalog.Hmon.HubSample.Web", "Dyalog.Hmon.HubSample.Web\Dyalog.Hmon.HubSample.Web.csproj", "{B8071369-D288-415C-8A5A-C76E7E8C0148}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dyalog.Hmon.OtelAdapter", "Dyalog.Hmon.OtelAdapter\Dyalog.Hmon.OtelAdapter.csproj", "{A3E053C6-3C06-4CC8-86B2-8812A3FB383A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -69,6 +71,18 @@ Global
 		{B8071369-D288-415C-8A5A-C76E7E8C0148}.Release|x64.Build.0 = Release|Any CPU
 		{B8071369-D288-415C-8A5A-C76E7E8C0148}.Release|x86.ActiveCfg = Release|Any CPU
 		{B8071369-D288-415C-8A5A-C76E7E8C0148}.Release|x86.Build.0 = Release|Any CPU
+		{A3E053C6-3C06-4CC8-86B2-8812A3FB383A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A3E053C6-3C06-4CC8-86B2-8812A3FB383A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A3E053C6-3C06-4CC8-86B2-8812A3FB383A}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{A3E053C6-3C06-4CC8-86B2-8812A3FB383A}.Debug|x64.Build.0 = Debug|Any CPU
+		{A3E053C6-3C06-4CC8-86B2-8812A3FB383A}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A3E053C6-3C06-4CC8-86B2-8812A3FB383A}.Debug|x86.Build.0 = Debug|Any CPU
+		{A3E053C6-3C06-4CC8-86B2-8812A3FB383A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A3E053C6-3C06-4CC8-86B2-8812A3FB383A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A3E053C6-3C06-4CC8-86B2-8812A3FB383A}.Release|x64.ActiveCfg = Release|Any CPU
+		{A3E053C6-3C06-4CC8-86B2-8812A3FB383A}.Release|x64.Build.0 = Release|Any CPU
+		{A3E053C6-3C06-4CC8-86B2-8812A3FB383A}.Release|x86.ActiveCfg = Release|Any CPU
+		{A3E053C6-3C06-4CC8-86B2-8812A3FB383A}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
