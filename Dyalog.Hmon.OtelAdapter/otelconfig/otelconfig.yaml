@@ -36,5 +36,5 @@ service:
     # Pipeline for logs
     logs:
       receivers: [otlp]
-      exporters: [nop]
+      exporters: [debug]
 

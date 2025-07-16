@@ -1,10 +1,10 @@
 # Progress: HMON-to-OTEL Adapter
 
-_Last reviewed: 2025-07-16 09:39 CEST_
+_Last reviewed: 2025-07-16 16:45 CEST_
 
 ## What works
-- Project focus switched to hmon-to-otel-adapter.
-- Memory bank, instructions, and TODO updated for adapter context.
+- Project focus is on hmon-to-otel-adapter.
+- Memory bank and TODOs reviewed and confirmed up to date.
 - Architectural, product, and technical context established.
 - .NET console project scaffolded.
 - Core dependencies (Serilog, Spectre.Console, Microsoft.Data.Sqlite, OpenTelemetry) installed.
@@ -42,16 +42,17 @@ _Last reviewed: 2025-07-16 09:39 CEST_
 
 ## What's left to build
 
+- Implement adapter logic for HMON-to-OTEL translation.
 - Implement additional unit and integration tests (scaffolding, strategy, and first integration test implemented; MockHmonServer extended for robust testing. See [docs/hmon_to_otel_adapter_tests.md](../docs/hmon_to_otel_adapter_tests.md)).
 - Project is now fully documented, including usage examples in [docs/hmon_to_otel_adapter.md](../docs/hmon_to_otel_adapter.md).
 
 ## Current status
-- Requirements and goals reviewed (see docs/hmon-to-otel-adapter-PRD.md).
-- Memory bank and instructions updated.
-- Ready to begin implementation.
+- Memory bank and TODOs reviewed and confirmed up to date.
+- Ready to begin implementation of adapter logic as per docs/hmon-to-otel-adapter-PRD.md and TODO-hmonadapter.md.
 
 ## Known issues
 - No adapter code implemented yet.
 
 ## Evolution of project decisions
 - Project scope and context updated to focus on HMON-to-OTEL Adapter as of 2025-07-16.
+- Memory bank and TODOs reviewed and updated as of 2025-07-16 16:45 CEST.

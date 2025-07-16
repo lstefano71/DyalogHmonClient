@@ -1,6 +1,7 @@
 using Dyalog.Hmon.Client.Lib;
 
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 using OpenTelemetry.Metrics;
 
@@ -20,6 +21,8 @@ public class AdapterService : BackgroundService, IAsyncDisposable
   private TelemetryFactory? _telemetryFactory;
   private readonly Meter _meter;
   private readonly ConcurrentDictionary<string, SessionMetrics> _sessionMetrics = new();
+  private readonly Microsoft.Extensions.Logging.ILogger _otelLogger;
+  private readonly Microsoft.Extensions.Logging.ILoggerFactory _otelLoggerFactory;
 
   private class SessionMetrics
   {
@@ -47,6 +50,14 @@ public class AdapterService : BackgroundService, IAsyncDisposable
   {
     _adapterConfig = adapterConfig;
     _meter = new Meter(_adapterConfig.MeterName);
+
+    _otelLoggerFactory = LoggerFactory.Create(builder => {
+      builder.AddSerilog(new LoggerConfiguration()
+        .WriteTo.OpenTelemetry(endpoint: _adapterConfig.OtelExporter?.Endpoint)
+        .CreateLogger());
+    });
+    _otelLogger = _otelLoggerFactory.CreateLogger("HmonToOtel");
+
     // ObservableGauge for each metric, emits per-session measurements with tags
     _meter.CreateObservableGauge("dyalog.workspace.memory.available", () =>
       _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceMemoryAvailable, sm.Tags ?? Array.Empty<KeyValuePair<string, object?>>())), "Workspace Memory Available");
@@ -96,15 +107,11 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     _telemetryFactory = new TelemetryFactory(_adapterConfig);
 
     // Activate polling listener if configured
-    if (_adapterConfig.PollListener is not null)
-    {
-      try
-      {
+    if (_adapterConfig.PollListener is not null) {
+      try {
         _ = _orchestrator.StartListenerAsync(_adapterConfig.PollListener.Ip, _adapterConfig.PollListener.Port, stoppingToken);
         Log.Information("Started polling listener on {Host}:{Port}", _adapterConfig.PollListener.Ip, _adapterConfig.PollListener.Port);
-      }
-      catch (Exception ex)
-      {
+      } catch (Exception ex) {
         Log.Error(ex, "Failed to start polling listener on {Host}:{Port}", _adapterConfig.PollListener.Ip, _adapterConfig.PollListener.Port);
       }
     }
@@ -123,7 +130,15 @@ public class AdapterService : BackgroundService, IAsyncDisposable
       await _orchestrator.PollFactsAsync(args.SessionId, facts, pollingInterval);
       Log.Information("Started polling for FactTypes: {FactTypes} on session {SessionId} with interval {Interval}ms",
         facts, args.SessionId, pollingInterval.TotalMilliseconds);
-      await _orchestrator.SubscribeAsync(args.SessionId, new[] { SubscriptionEvent.All });
+      // WARNING: (DO NOT DELETE!) if the events supported by the HMON server change, this list must be updated accordingly.
+      SubscriptionEvent[] allEvents = [
+        SubscriptionEvent.WorkspaceCompaction,
+        SubscriptionEvent.WorkspaceResize,
+        SubscriptionEvent.UntrappedSignal,
+        SubscriptionEvent.TrappedSignal,
+        SubscriptionEvent.ThreadSwitch
+      ];
+      await _orchestrator.SubscribeAsync(args.SessionId, allEvents);
       Log.Information("Subscribed to all events on session {SessionId}", args.SessionId);
     };
 
@@ -248,13 +263,45 @@ public class AdapterService : BackgroundService, IAsyncDisposable
 
   private async Task HandleNotificationReceivedEventAsync(NotificationReceivedEvent notificationEvent, CancellationToken stoppingToken)
   {
-    // Stub implementation
-    await Task.CompletedTask;
+    var sessionId = notificationEvent.SessionId;
+    var logAttributes = new Dictionary<string, object> {
+      ["event.name"] = notificationEvent.Notification.Event.Name,
+      ["service.name"] = _adapterConfig.ServiceName,
+      ["session.id"] = sessionId.ToString(),
+      ["notification.uid"] = notificationEvent.Notification.UID
+    };
+
+    switch (notificationEvent.Notification.Event.Name) {
+      case "UntrappedSignal":
+      case "TrappedSignal":
+        // Fetch thread details for enrichment
+        var threadsFact = await _orchestrator!.GetFactsAsync(sessionId, [FactType.Threads], stoppingToken);
+        logAttributes["dyalog.signal.dmx"] = notificationEvent.Notification.DMX;
+        logAttributes["dyalog.signal.stack"] = notificationEvent.Notification.Stack;
+        logAttributes["dyalog.signal.thread_info"] = notificationEvent.Notification.Tid;
+        _otelLogger.LogError("Signal event received {@Attributes}", logAttributes);
+        break;
+      case "WorkspaceResize":
+        logAttributes["resize.new_size"] = notificationEvent.Notification.Size;
+        _otelLogger.LogInformation("WorkspaceResize event received {@Attributes}", logAttributes);
+        break;
+      default:
+        _otelLogger.LogInformation("Notification event received {@Attributes}", logAttributes);
+        break;
+    }
   }
 
   private void HandleUserMessageReceivedEvent(UserMessageReceivedEvent userMsgEvent)
   {
-    // Stub implementation
+    var sessionId = userMsgEvent.SessionId != Guid.Empty ? userMsgEvent.SessionId.ToString() : "default";
+    var logAttributes = new Dictionary<string, object> {
+      ["event.name"] = "UserMessageReceived",
+      ["service.name"] = _adapterConfig.ServiceName,
+      ["session.id"] = sessionId,
+      ["user_message.uid"] = userMsgEvent.Message?.UID,
+      ["user_message.body"] = userMsgEvent.Message?.Message.GetRawText()
+    };
+    _otelLogger.LogInformation("User message received {@Attributes}", logAttributes);
   }
 
   private void HandleUnknownEvent(object hmonEvent)

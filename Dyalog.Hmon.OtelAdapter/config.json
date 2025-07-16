@@ -11,6 +11,6 @@
   "OtelExporter": {
     "Endpoint": "http://localhost:4317"
   },
-  "LogLevel": "Information",
+  "LogLevel": "Debug",
   "MeterName": "HMON"
 }
