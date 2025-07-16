@@ -1,6 +1,6 @@
 # Active Context: HMON-to-OTEL Adapter
 
-_Last reviewed: 2025-07-16 16:45 CEST_
+_Last reviewed: 2025-07-16 21:01 CEST_
 
 ## Current Focus
 - Project focus is on hmon-to-otel-adapter.

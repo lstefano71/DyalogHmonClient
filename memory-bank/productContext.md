@@ -1,6 +1,6 @@
 # Product Context: HMON-to-OTEL Adapter
 
-_Last reviewed: 2025-07-16 09:38 CEST_
+_Last reviewed: 2025-07-16 21:01 CEST_
 
 ## Why this project exists
 Modern observability platforms rely on OpenTelemetry for unified metrics and tracing. Dyalog APL environments use the HMON protocol for health and event monitoring, but lack direct integration with OTEL. The adapter bridges this gap, enabling organizations to monitor APL systems alongside other infrastructure using standard OTEL tools.

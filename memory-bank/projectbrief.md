@@ -1,6 +1,6 @@
 # Project Brief: HMON-to-OTEL Adapter
 
-_Last reviewed: 2025-07-16 09:38 CEST_
+_Last reviewed: 2025-07-16 21:01 CEST_
 
 ## Vision
 Deliver a robust, modern .NET adapter that translates Dyalog HMON protocol events and metrics into OpenTelemetry-compatible data, enabling seamless integration of APL monitoring into OTEL-based observability platforms.
@@ -21,4 +21,4 @@ The HMON-to-OTEL Adapter abstracts the complexities of HMON event and metric for
 ## Scope
 This project covers the HMON-to-OTEL Adapter only. Client applications and HMON server implementations are out of scope.
 
-_Memory bank fully reviewed and confirmed up to date as of 2025-07-16 09:38 CEST._
+_Memory bank fully reviewed and confirmed up to date as of 2025-07-16 21:01 CEST._

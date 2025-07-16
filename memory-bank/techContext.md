@@ -1,6 +1,6 @@
 # Tech Context: HMON-to-OTEL Adapter
 
-_Last reviewed: 2025-07-16 09:39 CEST_
+_Last reviewed: 2025-07-16 21:01 CEST_
 
 ## Technologies Used
 - .NET 9.0, C# 13

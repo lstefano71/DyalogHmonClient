@@ -1,6 +1,6 @@
 # System Patterns: HMON-to-OTEL Adapter
 
-_Last reviewed: 2025-07-16 09:38 CEST_
+_Last reviewed: 2025-07-16 21:01 CEST_
 
 ## Architecture
 - Adapter service runs as a standalone .NET process.

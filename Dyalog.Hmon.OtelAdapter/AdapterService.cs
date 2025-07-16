@@ -17,6 +17,10 @@ namespace Dyalog.Hmon.OtelAdapter;
 
 using System.Collections.Generic;
 
+/// <summary>
+/// Background service that connects to HMON servers, polls for facts and events,
+/// and translates them into OpenTelemetry metrics and logs for observability.
+/// </summary>
 public class AdapterService : BackgroundService, IAsyncDisposable
 {
   private readonly AdapterConfig _adapterConfig;
@@ -27,28 +31,54 @@ public class AdapterService : BackgroundService, IAsyncDisposable
   private readonly Microsoft.Extensions.Logging.ILogger _otelLogger;
   private readonly Microsoft.Extensions.Logging.ILoggerFactory _otelLoggerFactory;
 
+  /// <summary>
+  /// Holds per-session metric values and tags for OTEL export.
+  /// </summary>
   private class SessionMetrics
   {
+    /// <summary>Available workspace memory.</summary>
     public long WorkspaceMemoryAvailable;
+    /// <summary>Used workspace memory.</summary>
     public long WorkspaceMemoryUsed;
+    /// <summary>Total workspace memory allocation.</summary>
     public long WorkspaceMemoryAllocation;
+    /// <summary>Workspace memory allocation high-water mark.</summary>
     public long WorkspaceMemoryAllocationHwm;
+    /// <summary>Number of workspace compactions.</summary>
     public long WorkspaceCompactions;
+    /// <summary>Number of workspace garbage collections.</summary>
     public long WorkspaceGcCollections;
+    /// <summary>Number of garbage pockets in workspace.</summary>
     public long WorkspacePocketsGarbage;
+    /// <summary>Number of free pockets in workspace.</summary>
     public long WorkspacePocketsFree;
+    /// <summary>Number of used pockets in workspace.</summary>
     public long WorkspacePocketsUsed;
+    /// <summary>Workspace sediment value.</summary>
     public long WorkspaceSediment;
+    /// <summary>Requested workspace trap reserve.</summary>
     public long WorkspaceTrapReserveWanted;
+    /// <summary>Actual workspace trap reserve.</summary>
     public long WorkspaceTrapReserveActual;
+    /// <summary>Account CPU time.</summary>
     public long AccountCpuTime;
+    /// <summary>Account connect time.</summary>
     public long AccountConnectTime;
+    /// <summary>Account keying time.</summary>
     public long AccountKeyingTime;
+    /// <summary>Total thread count.</summary>
     public long ThreadsTotal;
+    /// <summary>Suspended thread count.</summary>
     public long ThreadsSuspended;
+    /// <summary>Tags for OTEL metrics and logs.</summary>
     public KeyValuePair<string, object?>[]? Tags;
   }
 
+  /// <summary>
+  /// Initializes a new instance of the <see cref="AdapterService"/> class with the specified adapter configuration.
+  /// Sets up OpenTelemetry metrics, logging, and prepares session metric tracking.
+  /// </summary>
+  /// <param name="adapterConfig">Adapter configuration settings.</param>
   public AdapterService(AdapterConfig adapterConfig)
   {
     _adapterConfig = adapterConfig;
@@ -105,6 +135,11 @@ public class AdapterService : BackgroundService, IAsyncDisposable
       _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.ThreadsSuspended, sm.Tags ?? [])), "Suspended Thread Count");
   }
 
+  /// <summary>
+  /// Main execution loop for the background service.
+  /// Connects to HMON servers, subscribes to events, and processes incoming data.
+  /// </summary>
+  /// <param name="stoppingToken">Cancellation token for graceful shutdown.</param>
   protected override async Task ExecuteAsync(CancellationToken stoppingToken)
   {
     Log.Information("AdapterService started.");
@@ -210,6 +245,10 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     Log.Information("AdapterService stopping.");
   }
 
+  /// <summary>
+  /// Processes incoming HMON events and dispatches them to the appropriate handlers.
+  /// </summary>
+  /// <param name="stoppingToken">Cancellation token for graceful shutdown.</param>
   private async Task ProcessEventsAsync(CancellationToken stoppingToken)
   {
     try {
@@ -236,6 +275,10 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     }
   }
 
+  /// <summary>
+  /// Handles received facts from the HMON server, mapping them to session metrics and OTEL attributes.
+  /// </summary>
+  /// <param name="factsEvent">The facts event received from the HMON server.</param>
   private void HandleFactsReceivedEvent(FactsReceivedEvent factsEvent)
   {
     Log.Debug("Processing FactsReceivedEvent with {FactCount} facts.", factsEvent.Facts.Facts.Count());
@@ -297,6 +340,11 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     }
   }
 
+  /// <summary>
+  /// Handles notification events from the HMON server, enriching logs with event-specific context.
+  /// </summary>
+  /// <param name="notificationEvent">The notification event received.</param>
+  /// <param name="stoppingToken">Cancellation token for graceful shutdown.</param>
   private async Task HandleNotificationReceivedEventAsync(NotificationReceivedEvent notificationEvent, CancellationToken stoppingToken)
   {
     var sessionId = notificationEvent.SessionId;
@@ -346,6 +394,10 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     }
   }
 
+  /// <summary>
+  /// Handles user message events from the HMON server and logs them with context.
+  /// </summary>
+  /// <param name="userMsgEvent">The user message event received.</param>
   private void HandleUserMessageReceivedEvent(UserMessageReceivedEvent userMsgEvent)
   {
     var sessionId = userMsgEvent.SessionId != Guid.Empty ? userMsgEvent.SessionId.ToString() : "default";
@@ -362,6 +414,11 @@ public class AdapterService : BackgroundService, IAsyncDisposable
       userMsgEvent.Message?.Message.GetRawText());
   }
 
+  /// <summary>
+  /// Merges session-level tags into the provided log attribute dictionary for enriched logging.
+  /// </summary>
+  /// <param name="sessionId">Session identifier.</param>
+  /// <param name="logAttributes">Dictionary of log attributes to enrich.</param>
   private void MergeSessionTagsIntoAttributes(string sessionId, Dictionary<string, object> logAttributes)
   {
     if (_sessionMetrics.TryGetValue(sessionId, out var metrics) && metrics.Tags != null) {
@@ -372,13 +429,16 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     }
   }
 
+  /// <summary>
+  /// Handles unknown or unrecognized HMON events, logging them for diagnostics.
+  /// </summary>
+  /// <param name="hmonEvent">The unknown event object.</param>
   private void HandleUnknownEvent(object hmonEvent)
   {
     var eventType = hmonEvent?.GetType().Name ?? "*unknown*";
     Log.Warning("Received unknown HMON event type: {EventType} {@Event}", eventType, hmonEvent);
 
-    var logAttributes = new Dictionary<string, object>
-    {
+    var logAttributes = new Dictionary<string, object> {
       ["service.name"] = _adapterConfig.ServiceName,
       ["event.type"] = eventType,
       ["event.payload"] = hmonEvent?.ToString() ?? "(null)"
@@ -387,13 +447,16 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     _otelLogger.LogWarning("Unknown HMON event received {event.type} {event.payload}", eventType, hmonEvent?.ToString() ?? "(null)");
   }
 
+  /// <summary>
+  /// Disposes resources used by the AdapterService, including orchestrator and telemetry providers.
+  /// </summary>
+  /// <returns>A task representing the asynchronous dispose operation.</returns>
   public async ValueTask DisposeAsync()
   {
     if (_orchestrator is not null)
       await _orchestrator.DisposeAsync();
     _meter?.Dispose();
-    _telemetryFactory?.MeterProvider?.ForceFlush();
-    _telemetryFactory?.MeterProvider?.Shutdown();
+    
     _telemetryFactory?.MeterProvider?.Dispose();
   }
 }

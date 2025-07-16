@@ -5,12 +5,17 @@ using OpenTelemetry.Resources;
 
 namespace Dyalog.Hmon.OtelAdapter;
 
+/// <summary>
+/// Factory for configuring and providing OpenTelemetry MeterProvider for metrics export.
+/// </summary>
 public class TelemetryFactory
 {
   public MeterProvider MeterProvider { get; }
-  // Note: OpenTelemetry .NET does not provide a direct LoggerProvider builder.
-  // Log export should be configured via Serilog or Microsoft.Extensions.Logging with OpenTelemetry extensions.
 
+  /// <summary>
+  /// Initializes a new instance of the <see cref="TelemetryFactory"/> class and configures the MeterProvider.
+  /// </summary>
+  /// <param name="config">Adapter configuration containing OTEL exporter and meter settings.</param>
   public TelemetryFactory(AdapterConfig config)
   {
     var resourceBuilder = ResourceBuilder.CreateDefault()
