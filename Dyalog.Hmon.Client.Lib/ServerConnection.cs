@@ -21,6 +21,7 @@ internal class ServerConnection : IAsyncDisposable
   private readonly Action<HmonConnection>? _registerConnection;
   private readonly CancellationTokenSource _cts = new();
   private HmonConnection? _hmonConnection;
+  private Task? _connectionTask; // Track the background connection task
 
   /// <summary>
   /// Initializes a new ServerConnection and starts connection management.
@@ -53,7 +54,7 @@ internal class ServerConnection : IAsyncDisposable
     _onClientConnected = onClientConnected;
     _onClientDisconnected = onClientDisconnected;
     _registerConnection = registerConnection;
-    _ = ConnectWithRetriesAsync(_cts.Token);
+    _connectionTask = ConnectWithRetriesAsync(_cts.Token); // Track the task
   }
 
   private async Task ConnectWithRetriesAsync(CancellationToken ct)
@@ -113,6 +114,13 @@ internal class ServerConnection : IAsyncDisposable
     _cts.Cancel();
     if (_hmonConnection != null) {
       await _hmonConnection.DisposeAsync();
+    }
+    if (_connectionTask != null) {
+      try {
+        await _connectionTask;
+      } catch (OperationCanceledException) {
+        // Expected on shutdown
+      }
     }
   }
 

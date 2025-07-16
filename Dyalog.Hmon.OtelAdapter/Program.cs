@@ -28,9 +28,19 @@ AnsiConsole.MarkupLine("[bold green]HMON-to-OTEL Adapter starting...[/]");
 
 Log.Debug("Loaded configuration: {@Config}", config);
 
+var adapterConfig = config.Get<AdapterConfig>();
+var validationContext = new System.ComponentModel.DataAnnotations.ValidationContext(adapterConfig ?? new AdapterConfig());
+var validationResults = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
+if (adapterConfig == null || !System.ComponentModel.DataAnnotations.Validator.TryValidateObject(adapterConfig, validationContext, validationResults, true)) {
+  Log.Error("Configuration validation failed: {Errors}", validationResults.Select(r => r.ErrorMessage).ToList());
+  AnsiConsole.MarkupLine("[bold red]Configuration validation failed.[/]");
+  return;
+}
+
 var host = Host.CreateDefaultBuilder(args)
     .UseSerilog()
     .ConfigureServices((context, services) => {
+      services.AddSingleton(adapterConfig);
       services.AddHostedService<AdapterService>();
     })
     .Build();

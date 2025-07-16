@@ -28,13 +28,13 @@ service:
     # Pipeline for traces
     traces:
       receivers: [otlp]
-      exporters: [debug] # Changed from 'logging' to 'debug'
+      exporters: [debug]
     # Pipeline for metrics
     metrics:
       receivers: [otlp]
-      exporters: [debug] # Changed from 'logging' to 'debug'
+      exporters: [debug]
     # Pipeline for logs
     logs:
       receivers: [otlp]
-      exporters: [nop] # Changed from 'logging' to 'debug'
+      exporters: [nop]
 

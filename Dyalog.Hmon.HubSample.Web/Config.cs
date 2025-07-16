@@ -23,7 +23,7 @@ public record ApiConfig(
 public record HubSampleConfig
 {
   [JsonPropertyName("hmonServers")]
-  public List<HmonServerConfig>? HmonServers { get; init; }
+  public List<HmonServerConfig>? HmonServers { get; init; } = [];
 
   [JsonPropertyName("pollListener")]
   public PollListenerConfig? PollListener { get; init; }

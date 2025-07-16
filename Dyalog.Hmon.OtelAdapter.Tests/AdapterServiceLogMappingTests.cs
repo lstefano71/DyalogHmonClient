@@ -24,7 +24,8 @@ public class AdapterServiceLogMappingTests
         Notification: notification
     );
 
-    var service = new AdapterService();
+    var config = new AdapterConfig();
+    var service = new AdapterService(config);
     // Only test construction for now, as MapLogAttributes does not exist
     Assert.NotNull(service);
   }

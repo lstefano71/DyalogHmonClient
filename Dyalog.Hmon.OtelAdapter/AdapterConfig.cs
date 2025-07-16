@@ -16,9 +16,29 @@ public record AdapterConfig
   public string? LogLevel { get; init; } = "Information";
 
   /// <summary>
-  /// Polling interval for facts in milliseconds. Default: 1000ms.
+  /// Polling interval for facts in milliseconds. Default: 5000ms.
   /// </summary>
-  public int PollingIntervalMs { get; init; } = 1000;
+  public int PollingIntervalMs { get; init; } = 5000;
+
+  /// <summary>
+  /// Name for the OpenTelemetry Meter. Optional, defaults to "HMON".
+  /// </summary>
+  public string MeterName { get; init; } = "HMON";
+
+  /// <summary>
+  /// Optional: Host address for polling listener. If set, activates listener.
+  /// </summary>
+  public string? ListenerHost { get; init; }
+
+  /// <summary>
+  /// Optional: Port for polling listener. If set, activates listener.
+  /// </summary>
+  public int? ListenerPort { get; init; }
+
+  /// <summary>
+  /// Optional: Polling listener configuration. If set, activates listener.
+  /// </summary>
+  public PollListenerConfig? PollListener { get; init; }
 }
 
 public record HmonServerConfig
@@ -40,4 +60,10 @@ public record OtelExporterConfig
 
   public string? Protocol { get; init; }
   public string? ApiKey { get; init; }
+}
+
+public record PollListenerConfig
+{
+  public string Ip { get; init; } = "0.0.0.0";
+  public int Port { get; init; }
 }

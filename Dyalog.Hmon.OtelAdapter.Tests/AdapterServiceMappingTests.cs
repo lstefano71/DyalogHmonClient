@@ -23,7 +23,7 @@ public class AdapterServiceMappingTests
             new HmonServerConfig { Name = "WebAppServer_1", Host = "10.0.1.50", Port = 4502 }
         ]
     };
-    var service = new AdapterService();
+    var service = new AdapterService(adapterConfig);
     // Only test construction for now, as MapResourceAttributes does not exist
     Assert.NotNull(service);
   }
@@ -37,7 +37,8 @@ public class AdapterServiceMappingTests
         new CommsLayerInfo("5.0.16", "127.0.0.1", 4502, 4503),
         new RideInfo(true, true, "1.2.3", "127.0.0.1", 4502, 4503)
     );
-    var service = new AdapterService();
+    var config = new AdapterConfig();
+    var service = new AdapterService(config);
     // TODO: Call mapping logic and assert expected metric attributes
     Assert.NotNull(hostFact);
     Assert.NotNull(service);
@@ -50,7 +51,8 @@ public class AdapterServiceMappingTests
         "wsid",
         100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200
     );
-    var service = new AdapterService();
+    var config = new AdapterConfig();
+    var service = new AdapterService(config);
     // TODO: Call mapping logic and assert expected metric attributes
     Assert.NotNull(workspaceFact);
     Assert.NotNull(service);

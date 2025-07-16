@@ -18,7 +18,7 @@ public class TelemetryFactory
 
     MeterProvider = Sdk.CreateMeterProviderBuilder()
         .SetResourceBuilder(resourceBuilder)
-        // TODO: Add metric instruments
+        .AddMeter(config.MeterName)
         .AddOtlpExporter(options => {
           options.Endpoint = new Uri(config.OtelExporter.Endpoint);
           if (!string.IsNullOrWhiteSpace(config.OtelExporter.Protocol))

@@ -27,6 +27,7 @@ internal class HmonConnection : IAsyncDisposable
   private readonly CancellationTokenSource _cts = new();
   private readonly ConcurrentDictionary<string, TaskCompletionSource<HmonEvent>> _pendingRequests = new();
   private readonly TaskCompletionSource<bool> _pipeReadyTcs = new();
+  private Task? _processingTask; // Track the background processing task
 
   /// <summary>
   /// Initializes a new HmonConnection for the given TCP client and session.
@@ -59,7 +60,7 @@ internal class HmonConnection : IAsyncDisposable
     try {
       _logger.Debug("Initializing HmonConnection (SessionId={SessionId})", _sessionId);
 
-      _ = StartProcessingAsync(ct); // Start processing messages, including handshake responses
+      _processingTask = StartProcessingAsync(ct); // Track the task
       await _pipeReadyTcs.Task; // Wait for pipe to be ready (handshake completed)
 
       if (_onClientConnected != null) {
@@ -211,6 +212,13 @@ internal class HmonConnection : IAsyncDisposable
   {
     _cts.Cancel();
     _tcpClient.Close();
+    if (_processingTask != null) {
+      try {
+        await _processingTask;
+      } catch (OperationCanceledException) {
+        // Expected on shutdown
+      }
+    }
     await _eventWriter.WaitToWriteAsync();
   }
 }

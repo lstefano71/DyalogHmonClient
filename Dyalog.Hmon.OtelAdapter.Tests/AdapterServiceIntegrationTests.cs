@@ -20,8 +20,9 @@ public class AdapterServiceIntegrationTests
     // Start the mock server and accept connection
     var serverTask = mockServer.AcceptAndHandshakeAsync(cts.Token);
 
-    // Prepare a minimal AdapterService (pseudo-code, actual connection logic may differ)
-    var service = new AdapterService();
+    // Prepare a minimal AdapterService with configuration
+    var config = new AdapterConfig();
+    var service = new AdapterService(config);
     var executeTask = service.StartAsync(cts.Token);
     await executeTask;
     Assert.True(executeTask.IsCompleted);
@@ -81,11 +82,7 @@ public class AdapterServiceIntegrationTests
       },
       LogLevel = "Information"
     };
-    var service = new AdapterService();
-    // Inject config if possible, otherwise mock LoadAndValidateConfig or set via reflection
-    typeof(AdapterService)
-        .GetField("_adapterConfig", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-        ?.SetValue(service, config);
+    var service = new AdapterService(config);
     var executeTask = service.StartAsync(cts.Token);
 
     // Inject a fact and notification

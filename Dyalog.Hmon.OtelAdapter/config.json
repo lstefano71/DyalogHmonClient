@@ -1,4 +1,5 @@
 {
+  "PollingIntervalMs": 5000,
   "ServiceName": "TestAdapter",
   "HmonServers": [
     {
@@ -10,5 +11,6 @@
   "OtelExporter": {
     "Endpoint": "http://localhost:4317"
   },
-  "LogLevel": "Information"
+  "LogLevel": "Information",
+  "MeterName": "HMON"
 }
