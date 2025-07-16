@@ -21,7 +21,7 @@ internal class ServerConnection : IAsyncDisposable
   private readonly Action<HmonConnection>? _registerConnection;
   private readonly CancellationTokenSource _cts = new();
   private HmonConnection? _hmonConnection;
-  private Task? _connectionTask; // Track the background connection task
+  private readonly Task? _connectionTask; // Track the background connection task
 
   /// <summary>
   /// Initializes a new ServerConnection and starts connection management.

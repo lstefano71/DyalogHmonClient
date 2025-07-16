@@ -1,21 +1,23 @@
 using Dyalog.Hmon.Client.Lib;
 
-using Google.Protobuf.WellKnownTypes;
-
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 using OpenTelemetry.Metrics;
 
 using Serilog;
-
+using Dyalog.Hmon.OtelAdapter.Logging;
 using Spectre.Console;
 
 using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
 
 namespace Dyalog.Hmon.OtelAdapter;
+
+
+using Serilog.Core;
+using Serilog.Events;
+using System.Collections.Generic;
 
 public class AdapterService : BackgroundService, IAsyncDisposable
 {
@@ -55,54 +57,56 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     _meter = new Meter(_adapterConfig.MeterName);
 
     Serilog.Sinks.OpenTelemetry.OtlpProtocol protocol = Serilog.Sinks.OpenTelemetry.OtlpProtocol.Grpc;
-    if (!string.IsNullOrWhiteSpace(_adapterConfig.OtelExporter.Protocol)) {
+    if (!string.IsNullOrWhiteSpace(_adapterConfig.OtelExporter.Protocol))
+    {
       System.Enum.TryParse(_adapterConfig.OtelExporter.Protocol, true, out protocol);
     }
 
-    _otelLoggerFactory = LoggerFactory.Create(builder => {
+    _otelLoggerFactory = LoggerFactory.Create(builder =>
+    {
       builder.AddSerilog(new LoggerConfiguration()
         .WriteTo.OpenTelemetry(
-        endpoint: _adapterConfig.OtelExporter?.Endpoint, 
-        protocol:  protocol)
+        endpoint: _adapterConfig.OtelExporter?.Endpoint,
+        protocol: protocol)
         .CreateLogger());
     });
     _otelLogger = _otelLoggerFactory.CreateLogger("HmonToOtel");
 
     // ObservableGauge for each metric, emits per-session measurements with tags
     _meter.CreateObservableGauge("dyalog.workspace.memory.available", () =>
-      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceMemoryAvailable, sm.Tags ?? Array.Empty<KeyValuePair<string, object?>>())), "Workspace Memory Available");
+      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceMemoryAvailable, sm.Tags ?? [])), "Workspace Memory Available");
     _meter.CreateObservableGauge("dyalog.workspace.memory.used", () =>
-      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceMemoryUsed, sm.Tags ?? Array.Empty<KeyValuePair<string, object?>>())), "Workspace Memory Used");
+      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceMemoryUsed, sm.Tags ?? [])), "Workspace Memory Used");
     _meter.CreateObservableGauge("dyalog.workspace.memory.allocation", () =>
-      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceMemoryAllocation, sm.Tags ?? Array.Empty<KeyValuePair<string, object?>>())), "Workspace Memory Allocation");
+      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceMemoryAllocation, sm.Tags ?? [])), "Workspace Memory Allocation");
     _meter.CreateObservableGauge("dyalog.workspace.memory.allocation_hwm", () =>
-      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceMemoryAllocationHwm, sm.Tags ?? Array.Empty<KeyValuePair<string, object?>>())), "Workspace Memory Allocation HWM");
+      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceMemoryAllocationHwm, sm.Tags ?? [])), "Workspace Memory Allocation HWM");
     _meter.CreateObservableGauge("dyalog.workspace.compactions", () =>
-      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceCompactions, sm.Tags ?? Array.Empty<KeyValuePair<string, object?>>())), "Workspace Compactions");
+      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceCompactions, sm.Tags ?? [])), "Workspace Compactions");
     _meter.CreateObservableGauge("dyalog.workspace.gc.collections", () =>
-      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceGcCollections, sm.Tags ?? Array.Empty<KeyValuePair<string, object?>>())), "Workspace GC Collections");
+      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceGcCollections, sm.Tags ?? [])), "Workspace GC Collections");
     _meter.CreateObservableGauge("dyalog.workspace.pockets.garbage", () =>
-      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspacePocketsGarbage, sm.Tags ?? Array.Empty<KeyValuePair<string, object?>>())), "Workspace Pockets Garbage");
+      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspacePocketsGarbage, sm.Tags ?? [])), "Workspace Pockets Garbage");
     _meter.CreateObservableGauge("dyalog.workspace.pockets.free", () =>
-      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspacePocketsFree, sm.Tags ?? Array.Empty<KeyValuePair<string, object?>>())), "Workspace Pockets Free");
+      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspacePocketsFree, sm.Tags ?? [])), "Workspace Pockets Free");
     _meter.CreateObservableGauge("dyalog.workspace.pockets.used", () =>
-      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspacePocketsUsed, sm.Tags ?? Array.Empty<KeyValuePair<string, object?>>())), "Workspace Pockets Used");
+      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspacePocketsUsed, sm.Tags ?? [])), "Workspace Pockets Used");
     _meter.CreateObservableGauge("dyalog.workspace.sediment", () =>
-      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceSediment, sm.Tags ?? Array.Empty<KeyValuePair<string, object?>>())), "Workspace Sediment");
+      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceSediment, sm.Tags ?? [])), "Workspace Sediment");
     _meter.CreateObservableGauge("dyalog.workspace.trapreservewanted", () =>
-      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceTrapReserveWanted, sm.Tags ?? Array.Empty<KeyValuePair<string, object?>>())), "Workspace Trap Reserve Wanted");
+      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceTrapReserveWanted, sm.Tags ?? [])), "Workspace Trap Reserve Wanted");
     _meter.CreateObservableGauge("dyalog.workspace.trapreserveactual", () =>
-      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceTrapReserveActual, sm.Tags ?? Array.Empty<KeyValuePair<string, object?>>())), "Workspace Trap Reserve Actual");
+      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceTrapReserveActual, sm.Tags ?? [])), "Workspace Trap Reserve Actual");
     _meter.CreateObservableGauge("dyalog.account.cpu_time", () =>
-      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.AccountCpuTime, sm.Tags ?? Array.Empty<KeyValuePair<string, object?>>())), "CPU Time");
+      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.AccountCpuTime, sm.Tags ?? [])), "CPU Time");
     _meter.CreateObservableGauge("dyalog.account.connect_time", () =>
-      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.AccountConnectTime, sm.Tags ?? Array.Empty<KeyValuePair<string, object?>>())), "Connect Time");
+      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.AccountConnectTime, sm.Tags ?? [])), "Connect Time");
     _meter.CreateObservableGauge("dyalog.account.keying_time", () =>
-      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.AccountKeyingTime, sm.Tags ?? Array.Empty<KeyValuePair<string, object?>>())), "Keying Time");
+      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.AccountKeyingTime, sm.Tags ?? [])), "Keying Time");
     _meter.CreateObservableGauge("dyalog.threads.total", () =>
-      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.ThreadsTotal, sm.Tags ?? Array.Empty<KeyValuePair<string, object?>>())), "Total Thread Count");
+      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.ThreadsTotal, sm.Tags ?? [])), "Total Thread Count");
     _meter.CreateObservableGauge("dyalog.threads.suspended", () =>
-      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.ThreadsSuspended, sm.Tags ?? Array.Empty<KeyValuePair<string, object?>>())), "Suspended Thread Count");
+      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.ThreadsSuspended, sm.Tags ?? [])), "Suspended Thread Count");
   }
 
   protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -117,16 +121,21 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     _telemetryFactory = new TelemetryFactory(_adapterConfig);
 
     // Activate polling listener if configured
-    if (_adapterConfig.PollListener is not null) {
-      try {
+    if (_adapterConfig.PollListener is not null)
+    {
+      try
+      {
         _ = _orchestrator.StartListenerAsync(_adapterConfig.PollListener.Ip, _adapterConfig.PollListener.Port, stoppingToken);
         Log.Information("Started polling listener on {Host}:{Port}", _adapterConfig.PollListener.Ip, _adapterConfig.PollListener.Port);
-      } catch (Exception ex) {
+      }
+      catch (Exception ex)
+      {
         Log.Error(ex, "Failed to start polling listener on {Host}:{Port}", _adapterConfig.PollListener.Ip, _adapterConfig.PollListener.Port);
       }
     }
 
-    _orchestrator.ClientConnected += async args => {
+    _orchestrator.ClientConnected += async args =>
+    {
       var pollingInterval = TimeSpan.FromMilliseconds(_adapterConfig?.PollingIntervalMs ?? 1000);
       // WARNING: (DO NOT DELETE!) if the facts supported by the HMON server change, this list must be updated accordingly.
       FactType[] facts = [
@@ -152,12 +161,17 @@ public class AdapterService : BackgroundService, IAsyncDisposable
       Log.Information("Subscribed to all events on session {SessionId}", args.SessionId);
     };
 
-    foreach (var server in _adapterConfig.HmonServers) {
-      try {
+    foreach (var server in _adapterConfig.HmonServers)
+    {
+      try
+      {
         _orchestrator.AddServer(server.Host, server.Port, server.Name);
         Log.Information("Added HMON server: {Host}:{Port} ({Name})", server.Host, server.Port, server.Name ?? "");
-      } catch (Exception ex) {
-        var logAttributes = new Dictionary<string, object> {
+      }
+      catch (Exception ex)
+      {
+        var logAttributes = new Dictionary<string, object>
+        {
           ["event.name"] = "ConnectionFailed",
           ["net.peer.name"] = server.Host,
           ["net.peer.port"] = server.Port,
@@ -167,8 +181,10 @@ public class AdapterService : BackgroundService, IAsyncDisposable
       }
     }
 
-    _orchestrator.ClientDisconnected += async args => {
-      var logAttributes = new Dictionary<string, object> {
+    _orchestrator.ClientDisconnected += async args =>
+    {
+      var logAttributes = new Dictionary<string, object>
+      {
         ["event.name"] = "ClientDisconnected",
         ["net.peer.name"] = args.Host,
         ["net.peer.port"] = args.Port,
@@ -186,9 +202,12 @@ public class AdapterService : BackgroundService, IAsyncDisposable
 
   private async Task ProcessEventsAsync(CancellationToken stoppingToken)
   {
-    try {
-      await foreach (var hmonEvent in _orchestrator.Events.WithCancellation(stoppingToken)) {
-        switch (hmonEvent) {
+    try
+    {
+      await foreach (var hmonEvent in _orchestrator.Events.WithCancellation(stoppingToken))
+      {
+        switch (hmonEvent)
+        {
           case FactsReceivedEvent factsEvent:
             HandleFactsReceivedEvent(factsEvent);
             break;
@@ -203,9 +222,13 @@ public class AdapterService : BackgroundService, IAsyncDisposable
             break;
         }
       }
-    } catch (OperationCanceledException) {
+    }
+    catch (OperationCanceledException)
+    {
       Log.Information("Event processing loop canceled.");
-    } catch (Exception ex) {
+    }
+    catch (Exception ex)
+    {
       Log.Error(ex, "Unhandled exception in main event processing loop");
     }
   }
@@ -216,11 +239,13 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     var sessionId = factsEvent.SessionId != Guid.Empty ? factsEvent.SessionId.ToString() : "default";
     var hostFact = factsEvent.Facts.Facts.OfType<HostFact>().FirstOrDefault();
     var accFactGlobal = factsEvent.Facts.Facts.OfType<AccountInformationFact>().FirstOrDefault();
-    var sessionAttributes = new Dictionary<string, object?> {
+    var sessionAttributes = new Dictionary<string, object?>
+    {
       ["service.name"] = _adapterConfig?.ServiceName ?? "HMON-to-OTEL Adapter",
       ["session.id"] = sessionId
     };
-    if (hostFact != null) {
+    if (hostFact != null)
+    {
       sessionAttributes["host.name"] = hostFact.Machine.Name;
       sessionAttributes["process.owner"] = hostFact.Machine.User;
       sessionAttributes["process.pid"] = hostFact.Machine.PID;
@@ -234,7 +259,8 @@ public class AdapterService : BackgroundService, IAsyncDisposable
       sessionAttributes["dyalog.conga.version"] = hostFact.CommsLayer?.Version;
       sessionAttributes["dyalog.hmon.access_level"] = hostFact.Machine.AccessLevel;
     }
-    if (accFactGlobal != null) {
+    if (accFactGlobal != null)
+    {
       sessionAttributes["enduser.id"] = accFactGlobal.UserIdentification.ToString();
       if (!string.IsNullOrEmpty(accFactGlobal.UserIdentification.ToString()))
         sessionAttributes["user_id"] = accFactGlobal.UserIdentification.ToString();
@@ -245,9 +271,11 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     var globalTags = sessionAttributes.Select(kv => new KeyValuePair<string, object?>(kv.Key, kv.Value)).ToArray();
     var metrics = _sessionMetrics.GetOrAdd(sessionId, _ => new SessionMetrics { Tags = globalTags });
     metrics.Tags = globalTags;
-    foreach (var fact in factsEvent.Facts.Facts) {
+    foreach (var fact in factsEvent.Facts.Facts)
+    {
       Log.Debug("Mapping fact: {FactType}", fact.GetType().Name);
-      if (fact is WorkspaceFact wsFactLocal) {
+      if (fact is WorkspaceFact wsFactLocal)
+      {
         metrics.WorkspaceMemoryAvailable = wsFactLocal.Available;
         metrics.WorkspaceMemoryUsed = wsFactLocal.Used;
         metrics.WorkspaceMemoryAllocation = wsFactLocal.Allocation;
@@ -260,11 +288,15 @@ public class AdapterService : BackgroundService, IAsyncDisposable
         metrics.WorkspaceSediment = wsFactLocal.Sediment;
         metrics.WorkspaceTrapReserveWanted = wsFactLocal.TrapReserveWanted;
         metrics.WorkspaceTrapReserveActual = wsFactLocal.TrapReserveActual;
-      } else if (fact is AccountInformationFact accFactLocal) {
+      }
+      else if (fact is AccountInformationFact accFactLocal)
+      {
         metrics.AccountCpuTime = accFactLocal.ComputeTime;
         metrics.AccountConnectTime = accFactLocal.ConnectTime;
         metrics.AccountKeyingTime = accFactLocal.KeyingTime;
-      } else if (fact is ThreadCountFact threadCountFactLocal) {
+      }
+      else if (fact is ThreadCountFact threadCountFactLocal)
+      {
         metrics.ThreadsTotal = threadCountFactLocal.Total;
         metrics.ThreadsSuspended = threadCountFactLocal.Suspended;
       }
@@ -274,29 +306,34 @@ public class AdapterService : BackgroundService, IAsyncDisposable
   private async Task HandleNotificationReceivedEventAsync(NotificationReceivedEvent notificationEvent, CancellationToken stoppingToken)
   {
     var sessionId = notificationEvent.SessionId;
-    var logAttributes = new Dictionary<string, object> {
+    var logAttributes = new Dictionary<string, object>
+    {
       ["event.name"] = notificationEvent.Notification.Event.Name,
       ["service.name"] = _adapterConfig.ServiceName,
       ["session.id"] = sessionId.ToString(),
       ["notification.uid"] = notificationEvent.Notification.UID
     };
 
+    MergeSessionTagsIntoAttributes(sessionId.ToString(), logAttributes);
+
     switch (notificationEvent.Notification.Event.Name) {
       case "UntrappedSignal":
       case "TrappedSignal":
         // Fetch thread details for enrichment
-        var threadsFact = await _orchestrator!.GetFactsAsync(sessionId, [FactType.Threads], stoppingToken);
-        logAttributes["dyalog.signal.dmx"] = notificationEvent.Notification.DMX;
-        logAttributes["dyalog.signal.stack"] = notificationEvent.Notification.Stack;
-        logAttributes["dyalog.signal.thread_info"] = notificationEvent.Notification.Tid;
-        _otelLogger.LogError("Signal event received {@Attributes}", logAttributes);
+        //var threadsFact = await _orchestrator!.GetFactsAsync(sessionId, [FactType.Threads], stoppingToken);
+        _otelLogger.LogErrorWithContext(logAttributes,
+          "Signal event received {dyalog.signal.dmx}, {dyalog.signal.stack}, {dyalog.signal.thread_info}"
+          , notificationEvent.Notification.DMX,
+          notificationEvent.Notification.Stack,
+          notificationEvent.Notification.Tid);
         break;
       case "WorkspaceResize":
-        logAttributes["resize.new_size"] = notificationEvent.Notification.Size;
-        _otelLogger.LogInformation("WorkspaceResize event received {@Attributes}", logAttributes);
+        _otelLogger.LogInformationWithContext(logAttributes,
+          "WorkspaceResize event received {resize.new_size}",
+          notificationEvent.Notification.Size);
         break;
       default:
-        _otelLogger.LogInformation("Notification event received {@Attributes}", logAttributes);
+        _otelLogger.LogInformationWithContext(logAttributes, "Notification event received");
         break;
     }
   }
@@ -304,14 +341,30 @@ public class AdapterService : BackgroundService, IAsyncDisposable
   private void HandleUserMessageReceivedEvent(UserMessageReceivedEvent userMsgEvent)
   {
     var sessionId = userMsgEvent.SessionId != Guid.Empty ? userMsgEvent.SessionId.ToString() : "default";
-    var logAttributes = new Dictionary<string, object> {
+    var logAttributes = new Dictionary<string, object>
+    {
       ["event.name"] = "UserMessageReceived",
       ["service.name"] = _adapterConfig.ServiceName,
       ["session.id"] = sessionId,
-      ["user_message.uid"] = userMsgEvent.Message?.UID,
-      ["user_message.body"] = userMsgEvent.Message?.Message.GetRawText()
+      ["user_message.uid"] = userMsgEvent.Message?.UID
     };
-    _otelLogger.LogInformation("User message received {@Attributes}", logAttributes);
+
+    MergeSessionTagsIntoAttributes(sessionId, logAttributes);
+
+    _otelLogger.LogInformationWithContext(logAttributes, "User message received: {user_message}", 
+      userMsgEvent.Message?.Message.GetRawText());
+  }
+
+  private void MergeSessionTagsIntoAttributes(string sessionId, Dictionary<string, object> logAttributes)
+  {
+    if (_sessionMetrics.TryGetValue(sessionId, out var metrics) && metrics.Tags != null)
+    {
+      foreach (var tag in metrics.Tags)
+      {
+        if (!logAttributes.ContainsKey(tag.Key) && tag.Value != null)
+          logAttributes[tag.Key] = tag.Value;
+      }
+    }
   }
 
   private void HandleUnknownEvent(object hmonEvent)
