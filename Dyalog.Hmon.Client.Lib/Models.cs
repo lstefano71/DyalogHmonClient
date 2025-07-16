@@ -1,6 +1,6 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Globalization;
 
 namespace Dyalog.Hmon.Client.Lib;
 
@@ -191,19 +191,19 @@ public record WsFullInfo([property: JsonConverter(typeof(HmonTimestampConverter)
 
 public class HmonTimestampConverter : JsonConverter<DateTime>
 {
-    private const string Format = "yyyyMMdd'T'HHmmss.fff'Z'";
-    public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        var str = reader.GetString();
-        if (str is null)
-            throw new JsonException("Timestamp string is null");
-        return DateTime.ParseExact(str, Format, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
-    }
+  private const string Format = "yyyyMMdd'T'HHmmss.fff'Z'";
+  public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+  {
+    var str = reader.GetString();
+    if (str is null)
+      throw new JsonException("Timestamp string is null");
+    return DateTime.ParseExact(str, Format, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
+  }
 
-    public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
-    {
-        writer.WriteStringValue(value.ToUniversalTime().ToString(Format, CultureInfo.InvariantCulture));
-    }
+  public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
+  {
+    writer.WriteStringValue(value.ToUniversalTime().ToString(Format, CultureInfo.InvariantCulture));
+  }
 }
 
 public record SubscribedResponse(string? UID, IEnumerable<SubscriptionStatus> Events);
@@ -270,8 +270,7 @@ public class OSErrorInfoJsonConverter : JsonConverter<OSErrorInfo?>
   }
   public override void Write(Utf8JsonWriter writer, OSErrorInfo? value, JsonSerializerOptions options)
   {
-    if (value == null)
-    {
+    if (value == null) {
       writer.WriteNullValue();
       return;
     }
