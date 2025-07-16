@@ -1,41 +1,41 @@
-﻿using Serilog;
-using Spectre.Console;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Dyalog.Hmon.OtelAdapter;
 using Microsoft.Extensions.Configuration;
-using Serilog.Extensions.Hosting;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Serilog;
+using Spectre.Console;
 
-namespace Dyalog.Hmon.OtelAdapter;
+// Modern C# 13 top-level async entry point
+var config = new ConfigurationBuilder()
+    .SetBasePath(AppContext.BaseDirectory)
+    .AddJsonFile("config.json", optional: true)
+    .AddEnvironmentVariables()
+    .AddCommandLine(args)
+    .Build();
 
-class Program
+var logLevel = config["LogLevel"] ?? "Information";
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Is(Enum.TryParse<Serilog.Events.LogEventLevel>(logLevel, true, out var lvl) ? lvl : Serilog.Events.LogEventLevel.Information)
+    .WriteTo.Console()
+    .CreateLogger();
+
+AnsiConsole.MarkupLine("[bold green]HMON-to-OTEL Adapter starting...[/]");
+
+Log.Debug("Loaded configuration: {@Config}", config);
+
+var host = Host.CreateDefaultBuilder(args)
+    .UseSerilog()
+    .ConfigureServices((context, services) => {
+      services.AddHostedService<AdapterService>();
+    })
+    .Build();
+
+using var cts = new CancellationTokenSource();
+Console.CancelKeyPress += (sender, eventArgs) =>
 {
-    static void Main(string[] args)
-    {
-        var config = new ConfigurationBuilder()
-            .SetBasePath(AppContext.BaseDirectory)
-            .AddJsonFile("config.json", optional: true)
-            .AddEnvironmentVariables()
-            .AddCommandLine(args)
-            .Build();
+  Log.Information("Ctrl+C pressed, shutting down...");
+  eventArgs.Cancel = true;
+  cts.Cancel();
+};
 
-        var logLevel = config["LogLevel"] ?? "Information";
-        Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Is(Enum.TryParse<Serilog.Events.LogEventLevel>(logLevel, true, out var lvl) ? lvl : Serilog.Events.LogEventLevel.Information)
-            .WriteTo.Console()
-            .CreateLogger();
-
-        AnsiConsole.MarkupLine("[bold green]HMON-to-OTEL Adapter starting...[/]");
-
-        Log.Debug("Loaded configuration: {@Config}", config);
-
-        var host = Host.CreateDefaultBuilder(args)
-            .UseSerilog()
-            .ConfigureServices((context, services) =>
-            {
-                services.AddHostedService<AdapterService>();
-            })
-            .Build();
-
-        host.Run();
-    }
-}
+await host.RunAsync(cts.Token);

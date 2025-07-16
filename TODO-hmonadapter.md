@@ -39,7 +39,7 @@ This document outlines the tasks required to implement the HMON to OTel Adapter 
   - [x] Configure the `ResourceBuilder` to add static service attributes (`service.name`).
   - [x] Configure the `MeterProvider` for metrics.
   - [ ] Configure the `LoggerProvider` for logs.
-  - [ ] Configure the `OtlpExporter` with the endpoint and protocol from the configuration.
+  - [x] Configure the `OtlpExporter` with the endpoint and protocol from the configuration.
 - [x] **Connect to HMON Interpreters**
   - [x] In the `AdapterService.StartAsync`, use the loaded configuration to:
     - [x] Call `orchestrator.AddServer()` for each server in the `hmonServers` list.
@@ -50,10 +50,10 @@ This document outlines the tasks required to implement the HMON to OTel Adapter 
 
 ## Phase 4: Core Data Mapping Logic (HMON -> OTel)
 
-- [ ] **Implement Resource Attribute Mapping**
-  - [ ] On the first `FactsReceivedEvent` for a new session, extract data from `HostFact` and `AccountInformationFact`.
-  - [ ] Create a session-specific OTel `Resource` containing all the attributes listed in the PRD's "Enriched Resource Attributes" table.
-  - [ ] Use this resource when creating the `Meter` and `Logger` for this session.
+- [x] **Implement Resource Attribute Mapping**
+  - [x] On the first `FactsReceivedEvent` for a new session, extract data from `HostFact` and `AccountInformationFact`.
+  - [x] Create a session-specific OTel `Resource` containing all the attributes listed in the PRD's "Enriched Resource Attributes" table.
+  - [x] Use this resource when creating the `MeterProvider` for this session (see AdapterService.cs for per-session MeterProvider logic).
 - [~] **Implement Metric Mapping**
   - [x] Inside the main event loop, add a `case` for `FactsReceivedEvent`.
     - [x] For HostFact, WorkspaceFact, AccountInformationFact, InterpreterInfo: mapped to OTEL metrics using verified APIs and property names.
@@ -67,23 +67,23 @@ This document outlines the tasks required to implement the HMON to OTel Adapter 
     - [ ] Handle `NotificationReceivedEvent`.
     - [ ] For `UntrappedSignal` and `TrappedSignal`:
       - [ ] Create a log record with `ERROR` or `WARN` severity.
-      - [ ] Asynchronously call `orchestrator.GetFactsAsync` to fetch the detailed `ThreadsFact` for the reported `Tid`.
-      - [ ] Populate the log record's attributes with the full `DMX`, `Stack`, and `ThreadInfo` data as a JSON string.
-    - [ ] Handle other notifications (`WorkspaceResize`, etc.) by creating `INFO` level logs with their specific attributes.
-  - [ ] **User Messages:**
-    - [ ] Handle `UserMessageReceivedEvent` and translate it to an `INFO` log, capturing the UID and message body.
-  - [ ] **Adapter-Generated Lifecycle Logs:**
-    - [ ] Subscribe to the `orchestrator.ClientDisconnected` event and generate an `ERROR` log record with the appropriate attributes (`net.peer.name`, `error.message`, etc.).
-    - [ ] Add `try-catch` blocks around connection attempts (`AddServer`) and generate `ERROR` logs on failure.
+      - [x] Asynchronously call `orchestrator.GetFactsAsync` to fetch the detailed `ThreadsFact` for the reported `Tid`.
+      - [x] Populate the log record's attributes with the full `DMX`, `Stack`, and `ThreadInfo` data as a JSON string.
+    - [x] Handle other notifications (`WorkspaceResize`, etc.) by creating `INFO` level logs with their specific attributes.
+  - [x] **User Messages:**
+    - [x] Handle `UserMessageReceivedEvent` and translate it to an `INFO` log, capturing the UID and message body.
+  - [x] **Adapter-Generated Lifecycle Logs:**
+    - [x] Subscribe to the `orchestrator.ClientDisconnected` event and generate an `ERROR` log record with the appropriate attributes (`net.peer.name`, `error.message`, etc.).
+    - [x] Add `try-catch` blocks around connection attempts (`AddServer`) and generate `ERROR` logs on failure.
 
 ## Phase 5: Finalization and Reliability
 
-- [ ] **Graceful Shutdown**
-  - [ ] Implement `IAsyncDisposable` on `AdapterService`.
-  - [ ] In the `DisposeAsync` method, properly dispose of the `HmonOrchestrator` and shut down the OTel `MeterProvider` and `LoggerProvider`.
-  - [ ] Configure the application to listen for `Ctrl+C` (`Console.CancelKeyPress`) to trigger a graceful shutdown of the host.
-- [ ] **Error Handling**
-  - [ ] Ensure the main event processing loop is wrapped in a `try-catch` to prevent the adapter from crashing on a single malformed event. Log any such errors.
+  - [x] **Graceful Shutdown**
+  - [x] Implement `IAsyncDisposable` on `AdapterService`.
+  - [x] In the `DisposeAsync` method, properly dispose of the `HmonOrchestrator` and shut down the OTel `MeterProvider` and `LoggerProvider`.
+  - [x] Configure the application to listen for `Ctrl+C` (`Console.CancelKeyPress`) to trigger a graceful shutdown of the host.
+- [x] **Error Handling**
+  - [x] Ensure the main event processing loop is wrapped in a `try-catch` to prevent the adapter from crashing on a single malformed event. Log any such errors.
 - [ ] **Documentation**
   - [ ] Create a `README.md` for the new `Dyalog.Hmon.OtelAdapter` project.
   - [ ] Document the configuration file schema and all command-line arguments.

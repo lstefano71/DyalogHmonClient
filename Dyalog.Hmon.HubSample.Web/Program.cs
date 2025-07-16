@@ -1,5 +1,7 @@
 using Dyalog.Hmon.HubSample.Web;
+
 using Microsoft.Extensions.Options;
+
 using Serilog;
 using Serilog.Events;
 
@@ -19,7 +21,7 @@ LogEventLevel logLevel = LogEventLevel.Information;
 var logLevelConfig = builder.Configuration["LogLevel"];
 if (!string.IsNullOrWhiteSpace(logLevelConfig) &&
     Enum.TryParse<Serilog.Events.LogEventLevel>(logLevelConfig, true, out var parsedLevel))
-    logLevel = parsedLevel;
+  logLevel = parsedLevel;
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Is(logLevel)
@@ -44,8 +46,8 @@ app.UseWebSockets();
 app.Map("/ws", wsHub.HandleWebSocketAsync);
 
 app.MapGet("/facts", () => new {
-    facts = aggregator.GetAllFacts(),
-    events = aggregator.GetAllEvents()
+  facts = aggregator.GetAllFacts(),
+  events = aggregator.GetAllEvents()
 });
 app.MapGet("/status", () => new[] { new { name = "LocalServer", status = "Connected" } }); // Placeholder
 
@@ -53,16 +55,16 @@ var apiConfig = config.Api;
 app.Urls.Add($"http://{apiConfig.Ip}:{apiConfig.Port}");
 
 if (config.AutoShutdownSeconds is int seconds && seconds > 0) {
-    using var cts = new CancellationTokenSource();
-    _ = Task.Run(async () => {
-        Log.Information("Auto-shutdown scheduled in {Seconds} seconds.", seconds);
-        await Task.Delay(TimeSpan.FromSeconds(seconds), cts.Token);
-        Log.Information("Auto-shutdown triggered.");
-        await app.StopAsync();
-    });
-    await app.RunAsync(cts.Token);
+  using var cts = new CancellationTokenSource();
+  _ = Task.Run(async () => {
+    Log.Information("Auto-shutdown scheduled in {Seconds} seconds.", seconds);
+    await Task.Delay(TimeSpan.FromSeconds(seconds), cts.Token);
+    Log.Information("Auto-shutdown triggered.");
+    await app.StopAsync();
+  });
+  await app.RunAsync(cts.Token);
 } else {
-    await app.RunAsync();
+  await app.RunAsync();
 }
 
 Log.CloseAndFlush();

@@ -16,6 +16,9 @@ _Last reviewed: 2025-07-16 09:39 CEST_
 - Console logging (complete)
 - HMON client instantiation (complete)
 - TelemetryFactory, ResourceBuilder, MeterProvider setup (complete)
+- OTLP exporter for metrics configured (complete)
+- Per-session MeterProvider and resource enrichment implemented (complete, see AdapterService.cs)
+- LoggerProvider setup removed; log export to OTLP should be configured via Serilog or Microsoft.Extensions.Logging with OpenTelemetry extensions (see techContext.md)
 - HMON interpreter connection (complete)
 - Main event processing loop (complete)
 - Metric mapping (in progress)
@@ -27,7 +30,12 @@ _Last reviewed: 2025-07-16 09:39 CEST_
   - Create the TagList of attributes (e.g., add wsid for workspace metrics) (in progress)
   - Record the measurement using the instrument (in progress)
 - Adapter implementation: HMON event/metric ingestion, OTEL mapping, and export.
+- Log enrichment for NotificationReceivedEvent signals (UntrappedSignal/TrappedSignal) implemented: DMX/Stack/ThreadInfo fetched and included in log record.
+- Log enrichment for WorkspaceResize and UserMessage events implemented per PRD.
+- Adapter-generated lifecycle logs (ClientDisconnected, ConnectionFailed) now include all required OTel attributes.
 - Configurable mapping/filtering logic.
+- Error handling: main event loop is now wrapped in try-catch and logs any unhandled exceptions.
+- Graceful shutdown: AdapterService implements IAsyncDisposable, disposes HmonOrchestrator and MeterProviders. Program.cs now listens for Ctrl+C and triggers host shutdown.
 - Error handling, diagnostics, and logging.
 - Unit and integration tests.
 - Documentation and usage guide.
