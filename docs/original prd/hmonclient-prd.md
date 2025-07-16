@@ -2,7 +2,7 @@
 
 | **Version** | **Date**      | **Author** | **Status** |
 | :---------- | :------------ | :--------- | :--------- |
-| 1.0         | July 14, 2025 | Gemini     | Final      |
+| 1.1         | July 16, 2025 | Cline      | Draft      |
 
 ## 1. Introduction & Vision
 
@@ -289,6 +289,28 @@ public record DisallowedUidEvent(Guid SessionId, DisallowedUidResponse Error) : 
 
 These records define the strongly-typed structure of the JSON payloads for each HMON message type.
 
+##### UID-Correlated Payloads
+
+The following payloads implement the `IUidPayload` interface, which provides a nullable `UID` property for request/response correlation:
+
+```csharp
+public interface IUidPayload
+{
+  string? UID { get; set; }
+}
+
+public record GetFactsPayload(int[] Facts) : IUidPayload { public string? UID { get; set; } }
+public record PollFactsPayload(int[] Facts, int Interval) : IUidPayload { public string? UID { get; set; } }
+public record SubscribePayload(int[] Events) : IUidPayload { public string? UID { get; set; } }
+public record LastKnownStatePayload() : IUidPayload { public string? UID { get; set; } }
+```
+
+##### Serialization and Polymorphism
+
+- All boolean properties are serialized as integers (0/1) using a custom `HMonBooleanConverter`.
+- All timestamps in LastKnownState and nested types are serialized using `HmonTimestampConverter` (format: `yyyyMMdd'T'HHmmss.fff'Z'`).
+- Facts are deserialized polymorphically using a custom `FactJsonConverter`, which selects the correct fact type based on the `Name` property and handles both `Value` and `Values` properties as appropriate.
+
 ##### Facts Models
 
 ```csharp
@@ -391,10 +413,19 @@ public record EventInfo(int ID, string Name);
 /// <summary>
 /// Represents the payload of a "LastKnownState" response message.
 /// </summary>
-public record LastKnownStateResponse(string? UID, string TS, ActivityInfo? Activity, LocationInfo? Location, [property: JsonPropertyName("WS FULL")] WsFullInfo? WsFull);
-public record ActivityInfo(int Code, string TS);
-public record LocationInfo(string Function, int Line, string TS);
-public record WsFullInfo(string TS);
+public record LastKnownStateResponse(
+    string? UID,
+    [property: JsonConverter(typeof(HmonTimestampConverter))] DateTime TS,
+    ActivityInfo? Activity,
+    LocationInfo? Location,
+    [property: JsonPropertyName("WS FULL")] WsFullInfo? WsFull
+);
+
+public record ActivityInfo(int Code, [property: JsonConverter(typeof(HmonTimestampConverter))] DateTime TS);
+public record LocationInfo(string Function, int Line, [property: JsonConverter(typeof(HmonTimestampConverter))] DateTime TS);
+public record WsFullInfo([property: JsonConverter(typeof(HmonTimestampConverter))] DateTime TS);
+
+// Note: All timestamps in LastKnownStateResponse and its nested types are now strongly typed as DateTime and use the HmonTimestampConverter for protocol-compliant serialization.
 
 /// <summary>
 /// Represents the payload of a "Subscribed" response message, confirming subscription settings.

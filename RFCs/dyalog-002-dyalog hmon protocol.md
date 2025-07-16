@@ -41,6 +41,9 @@ All HMON messages are transported as the payload of a DRP-T frame. The payload M
 
 > **Warning:**  
 > All boolean properties in HMON JSON payloads MUST be serialized as integers: `0` for `false` and `1` for `true`. Implementers should ensure this convention is followed to maintain compatibility with the protocol.
+>
+> **Timestamps:**  
+> All timestamp fields (e.g., `TS` in LastKnownState, ActivityInfo, LocationInfo, WsFullInfo) MUST be encoded as ISO 8601 strings with millisecond precision (e.g., `YYYY-MM-DDTHH:mm:ss.fffZ`). Client libraries may map these to native DateTime types.
 
 Example: `["MessageName", {"arg1": "value1", "arg2": 123}]`
 
@@ -261,6 +264,8 @@ A `Fact` object is a container for a piece of information about the interpreter.
 
 * **Structure:**
 
+    > **Note:** Clients should use the `Name` property for polymorphic handling of unknown or new fact types.
+
     | Name      | Type                   | Description                                                                   |
     | :-------- | :--------------------- | :---------------------------------------------------------------------------- |
     | `ID`      | Number                 | The numeric identifier for the fact. See Section 8.1.                         |
@@ -303,6 +308,8 @@ Contains information about the host machine, interpreter, and communication laye
 
 * **`CommsLayerInfo` and `RideInfo` Objects:**
 
+    > **Note:** All fields in `CommsLayerInfo` and `RideInfo` may be null if not present in the protocol message.
+
     | Name         | Type    | Description                                                                 |
     | :----------- | :------ | :-------------------------------------------------------------------------- |
     | `Listening`  | Boolean | (`RideInfo` only) `true` if the interpreter is listening for RIDE connections.  |
@@ -320,7 +327,7 @@ Contains elements from `⎕AI`.
 
     | Name                 | Type   | Description      |
     | :------------------- | :----- | :--------------- |
-    | `UserIdentification` | String | User's name.     |
+    | `UserIdentification` | Number | User's identifier.|
     | `ComputeTime`        | Number | Compute time.    |
     | `ConnectTime`        | Number | Connect time.    |
     | `KeyingTime`         | Number | Keying time.     |
@@ -372,6 +379,9 @@ These facts return a `Values` array, where each element is a `ThreadInfo` object
 
 * **`DmxInfo` Object:**
 
+    > **Note:** `InternalLocation` is an array `[string, number]` representing `[File, Line]`.  
+    > `OSError` is an array `[number, number, string]` representing `[Source, Code, Description]`.
+
     | Name               | Type    | Description                                                              |
     | :----------------- | :------ | :----------------------------------------------------------------------- |
     | `Restricted`       | Boolean | `true` if some information is missing due to the Access Level.           |
@@ -380,10 +390,10 @@ These facts return a `Values` array, where each element is a `ThreadInfo` object
     | `EM`               | String  | (`Restricted`: `false`) Error Message.                                   |
     | `EN`               | Number  | (`Restricted`: `false`) Error Number.                                    |
     | `ENX`              | String  | (`Restricted`: `false`) Error Number extended.                           |
-    | `InternalLocation` | String  | (`Restricted`: `false`) Internal location.                               |
+    | `InternalLocation` | Array   | (`Restricted`: `false`) `[File, Line]` tuple as an array.                |
     | `Vendor`           | String  | (`Restricted`: `false`) Vendor.                                          |
     | `Message`          | String  | (`Restricted`: `false`) Message.                                         |
-    | `OSError`          | Number  | (`Restricted`: `false`) Operating System error number.                   |
+    | `OSError`          | Array   | (`Restricted`: `false`) `[Source, Code, Description]` tuple as an array. |
 
 * **`ExceptionInfo` Object:**
 
