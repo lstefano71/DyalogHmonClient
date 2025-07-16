@@ -11,7 +11,6 @@ The adapter connects to one or more Dyalog APL interpreters using the HMON proto
 - Per-session resource enrichment: Each interpreter session is mapped to a distinct OTel Resource with attributes from HostFact, AccountInformationFact, and connection metadata.
 - Metric mapping: Workspace, account, and host facts are mapped to OTel metrics using verified APIs and property names.
 - Log mapping: Notifications, user messages, and lifecycle events are mapped to OTel logs with full enrichment.
-- Configurable mapping/filtering logic.
 - Robust error handling and graceful shutdown.
 - Console logging via Serilog.
 
@@ -19,7 +18,7 @@ The adapter connects to one or more Dyalog APL interpreters using the HMON proto
 
 1. **Configure the Adapter**
 
-   Edit `config.json` to specify HMON servers, poll listener, OTel exporter endpoint, and monitoring options.
+   Edit `config.json` to specify HMON servers, OpenTelemetry exporter endpoint, polling interval, and other options.
 
 2. **Build and Run**
 
@@ -36,31 +35,56 @@ The adapter connects to one or more Dyalog APL interpreters using the HMON proto
 
    Exported metrics and logs will be sent to your configured OTel collector endpoint.
 
-## Usage Examples
+## Configuration
 
-### Example Adapter Configuration
+The adapter is configured via a single `config.json` file. All keys are PascalCase and must match the structure below.
+
+### Example `config.json`
 
 ```json
 {
-  "hmonServers": [
-    { "name": "WebAppServer_1", "host": "10.0.1.50", "port": 4502 }
+  "ServiceName": "HMON-to-OTEL Adapter",
+  "HmonServers": [
+    {
+      "Host": "127.0.0.1",
+      "Port": 4502,
+      "Name": "TestServer"
+    }
   ],
-  "openTelemetryExporter": {
-    "endpoint": "http://otel-collector:4317",
-    "protocol": "Grpc"
+  "OtelExporter": {
+    "Endpoint": "http://localhost:4317",
+    "Protocol": "Grpc",
+    "ApiKey": null
   },
-  "monitoring": {
-    "serviceName": "DyalogHMONAdapter",
-    "pollIntervalSeconds": 15,
-    "subscribedEvents": ["UntrappedSignal", "WorkspaceResize", "UserMessage"]
-  },
-  "logging": {
-    "logLevel": "Information"
+  "PollingIntervalMs": 5000,
+  "LogLevel": "Information",
+  "MeterName": "HMON",
+  "PollListener": {
+    "Ip": "0.0.0.0",
+    "Port": 9000
   }
 }
 ```
 
-### Example Test Usage
+#### Configuration Fields
+
+- **ServiceName** (string, required): Logical name for the adapter service.
+- **HmonServers** (array, required): List of HMON server connections.
+  - **Host** (string, required): Hostname or IP of the HMON server.
+  - **Port** (int, required): Port number.
+  - **Name** (string, optional): Friendly name for the server.
+- **OtelExporter** (object, required): OpenTelemetry exporter configuration.
+  - **Endpoint** (string, required): OTel collector endpoint (e.g., `http://localhost:4317`).
+  - **Protocol** (string, optional): Export protocol (e.g., `Grpc`).
+  - **ApiKey** (string, optional): API key for secured endpoints.
+- **PollingIntervalMs** (int, optional): Fact polling interval in milliseconds (default: 5000).
+- **LogLevel** (string, optional): Logging level (default: `Information`).
+- **MeterName** (string, optional): Name for the OTel Meter (default: `HMON`).
+- **PollListener** (object, optional): Enables polling listener if set.
+  - **Ip** (string, optional): Listener IP (default: `0.0.0.0`).
+  - **Port** (int, required): Listener port.
+
+## Usage Examples
 
 See [docs/hmon_to_otel_adapter_tests.md](hmon_to_otel_adapter_tests.md) for test strategy and sample test code.
 
@@ -68,32 +92,6 @@ See [docs/hmon_to_otel_adapter_tests.md](hmon_to_otel_adapter_tests.md) for test
 // Example: Injecting a HostFact via MockHmonServer in integration test
 mockServer.EnqueueMessage(factsJson);
 // AdapterService will process the fact and export metrics/logs accordingly
-```
-
-## Configuration
-
-See the [Product Requirements Document (PRD)](hmon-to-otel-adapter-PRD.md) for full details on configuration options and resource/metric/log mapping.
-
-Example `config.json`:
-
-```json
-{
-  "hmonServers": [
-    { "name": "WebAppServer_1", "host": "10.0.1.50", "port": 4502 }
-  ],
-  "openTelemetryExporter": {
-    "endpoint": "http://otel-collector:4317",
-    "protocol": "Grpc"
-  },
-  "monitoring": {
-    "serviceName": "DyalogHMONAdapter",
-    "pollIntervalSeconds": 15,
-    "subscribedEvents": ["UntrappedSignal", "WorkspaceResize", "UserMessage"]
-  },
-  "logging": {
-    "logLevel": "Information"
-  }
-}
 ```
 
 ## Documentation
