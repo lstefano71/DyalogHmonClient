@@ -11,7 +11,7 @@ This list is prioritized to tackle the most critical correctness issues first, f
 
 ## Phase 2: Robustness and API Improvements (Library & Adapter)
 
-- [ ] **Feature Brief #1:** Introduce the Polly library for resilient connection retries.
+- [x] **Feature Brief #1:** Introduce the Polly library for resilient connection retries.
 - [ ] **Feature Brief #2:** Implement and use typed, specific exceptions for error handling.
 - [ ] **Feature Brief #3:** Implement a fact caching policy with TTL to prevent stale data.
 

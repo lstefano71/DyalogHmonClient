@@ -12,6 +12,7 @@ _Last reviewed: 2025-07-16 21:01 CEST_
 
 ## Completed Tasks
 
+- Feature Brief #1: Polly-based retry logic for resilient connection management implemented in ServerConnection.cs (2025-07-17).
 - Initial structure: Generic Host and AdapterService class.
 - Configuration models and loading logic.
 - Console logging.
@@ -47,12 +48,15 @@ _Last reviewed: 2025-07-16 21:01 CEST_
 - Project is now fully documented, including usage examples in [docs/hmon_to_otel_adapter.md](../docs/hmon_to_otel_adapter.md).
 
 ## Current status
+- Feature Brief #1 (Polly integration for connection retries) completed and documented.
 - Memory bank and TODOs reviewed and confirmed up to date.
+- Next: Implement and use typed, specific exceptions for error handling (Feature Brief #2).
 - Ready to begin implementation of adapter logic as per docs/hmon-to-otel-adapter-PRD.md and TODO-hmonadapter.md.
 
 ## Known issues
 - No adapter code implemented yet.
 
 ## Evolution of project decisions
+- Feature Brief #1: Adopted Polly for resilient connection retries in ServerConnection.cs as of 2025-07-17.
 - Project scope and context updated to focus on HMON-to-OTEL Adapter as of 2025-07-16.
 - Memory bank and TODOs reviewed and updated as of 2025-07-16 16:45 CEST.
