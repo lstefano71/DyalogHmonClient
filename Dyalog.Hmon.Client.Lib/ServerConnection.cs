@@ -4,6 +4,8 @@ using Polly.Retry;
 using System.Net.Sockets;
 using System.IO;
 using System.Threading.Channels;
+using Dyalog.Hmon.Client.Lib.Exceptions;
+
 namespace Dyalog.Hmon.Client.Lib;
 /// <summary>
 /// Manages a remote HMON server connection with retry and reconnection logic.
@@ -65,14 +67,16 @@ internal class ServerConnection : IAsyncDisposable
         }
       );
 
-    await retryPolicyWithJitter.ExecuteAsync(async () =>
+    try
     {
-      ct.ThrowIfCancellationRequested();
-      logger.Debug("Attempting to connect to {Host}:{Port} (SessionId={SessionId})", _host, _port, _sessionId);
-      var tcpClient = new TcpClient();
-      await tcpClient.ConnectAsync(_host, _port, ct);
+      await retryPolicyWithJitter.ExecuteAsync(async () =>
+      {
+        ct.ThrowIfCancellationRequested();
+        logger.Debug("Attempting to connect to {Host}:{Port} (SessionId={SessionId})", _host, _port, _sessionId);
+        var tcpClient = new TcpClient();
+        await tcpClient.ConnectAsync(_host, _port, ct);
 
-      logger.Information("Connection established to {Host}:{Port} (SessionId={SessionId})", _host, _port, _sessionId);
+        logger.Information("Connection established to {Host}:{Port} (SessionId={SessionId})", _host, _port, _sessionId);
 
         _hmonConnection = new HmonConnection(
             tcpClient,

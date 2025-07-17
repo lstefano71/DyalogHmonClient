@@ -1,4 +1,5 @@
 using Dyalog.Hmon.Client.Lib;
+using Dyalog.Hmon.Client.Lib.Exceptions;
 
 using Serilog;
 
@@ -109,8 +110,7 @@ internal class HmonConnection : IAsyncDisposable
       // Perform handshake using DrptFramer
       bool handshakeOk = await _hmonFramer.PerformHandshakeAsync(ct);
       if (!handshakeOk) {
-        reason = "Handshake failed";
-        throw new Exception($"Handshake failed for session: {_sessionId}.");
+        throw new HmonHandshakeFailedException($"Handshake failed for session: {_sessionId}.", null);
       }
       _pipeReadyTcs.TrySetResult(true);
       _logger.Debug("Handshake completed for session {SessionId}", _sessionId);

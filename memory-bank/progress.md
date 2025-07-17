@@ -1,6 +1,6 @@
 # Progress: HMON-to-OTEL Adapter
 
-_Last reviewed: 2025-07-16 21:01 CEST_
+_Last reviewed: 2025-07-17 17:51 CEST_
 
 ## What works
 - Project focus is on hmon-to-otel-adapter.
@@ -9,9 +9,14 @@ _Last reviewed: 2025-07-16 21:01 CEST_
 - .NET console project scaffolded.
 - Core dependencies (Serilog, Spectre.Console, Microsoft.Data.Sqlite, OpenTelemetry) installed.
 - Project reference to Dyalog.Hmon.Client.Lib added.
+- Feature Brief #2: Typed, specific exceptions for error handling implemented in Dyalog.Hmon.Client.Lib.
+  - Added HmonException, SessionNotFoundException, HmonConnectionException, HmonHandshakeFailedException, CommandTimeoutException.
+  - Refactored HmonOrchestrator, ServerConnection, HmonConnection to use new exceptions.
+  - Updated XML documentation for public API methods.
 
 ## Completed Tasks
 
+- Feature Brief #2: Typed, specific exceptions for error handling (2025-07-17).
 - Feature Brief #1: Polly-based retry logic for resilient connection management implemented in ServerConnection.cs (2025-07-17).
 - Initial structure: Generic Host and AdapterService class.
 - Configuration models and loading logic.
@@ -48,15 +53,17 @@ _Last reviewed: 2025-07-16 21:01 CEST_
 - Project is now fully documented, including usage examples in [docs/hmon_to_otel_adapter.md](../docs/hmon_to_otel_adapter.md).
 
 ## Current status
+- Feature Brief #2 (typed, specific exceptions for error handling) completed and documented.
 - Feature Brief #1 (Polly integration for connection retries) completed and documented.
 - Memory bank and TODOs reviewed and confirmed up to date.
-- Next: Implement and use typed, specific exceptions for error handling (Feature Brief #2).
+- Next: Implement adapter logic for HMON-to-OTEL translation.
 - Ready to begin implementation of adapter logic as per docs/hmon-to-otel-adapter-PRD.md and TODO-hmonadapter.md.
 
 ## Known issues
 - No adapter code implemented yet.
 
 ## Evolution of project decisions
+- Feature Brief #2: Adopted typed, specific exceptions for error handling in Dyalog.Hmon.Client.Lib as of 2025-07-17.
 - Feature Brief #1: Adopted Polly for resilient connection retries in ServerConnection.cs as of 2025-07-17.
 - Project scope and context updated to focus on HMON-to-OTEL Adapter as of 2025-07-16.
 - Memory bank and TODOs reviewed and updated as of 2025-07-16 16:45 CEST.
