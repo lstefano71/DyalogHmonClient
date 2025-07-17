@@ -222,3 +222,156 @@ We will refactor the `HmonOrchestrator` to use a **single, unified event stream*
   - **Migration Effort:** Consumers will need to refactor their event handling logic to use the new `switch` pattern on the event stream instead of attaching to C# events. Clear documentation and migration guides will be essential.
 
 This change aligns the library with modern, reactive programming patterns and ultimately leads to a more robust and easier-to-use API, despite the initial cost of the breaking change.
+
+You are absolutely right. My apologies for omitting those. Here are the three remaining feature briefs, written in the same detailed format.
+
+---
+
+#### **Feature Brief #3: Implement a Fact Caching Policy with TTL**
+
+**Problem Statement:**
+The `HmonOrchestrator._factCache` provides a valuable performance enhancement by caching the latest facts from each session. However, it lacks an invalidation or expiration mechanism. If polling stops for a given session (either intentionally or due to a prolonged disconnection), the cache will hold onto its last known values indefinitely. The public `GetFact<T>()` method will then continue to serve this stale data to consumers, which can lead to incorrect monitoring dashboards and faulty application logic.
+
+**Proposed Solution:**
+We will implement a simple Time-To-Live (TTL) check on the cached facts to ensure consumers do not receive outdated information.
+
+1.  **Configuration:** Add a new property to the `HmonOrchestratorOptions` record to make the TTL configurable.
+    ```csharp
+    // In HmonOrchestratorOptions.cs
+    public record HmonOrchestratorOptions
+    {
+        // ... existing properties
+        public TimeSpan FactCacheTTL { get; init; } = TimeSpan.FromMinutes(5);
+    }
+    ```
+2.  **Read-Time Invalidation:** Modify the `GetFact` and `GetFactWithTimestamp` methods in `HmonOrchestrator.cs`. Before returning a cached fact, these methods will perform a check against the `LastUpdated` timestamp stored in the `FactCacheEntry`.
+    ```csharp
+    // In HmonOrchestrator.cs
+    public T? GetFact<T>(Guid sessionId) where T : Fact
+    {
+        if (_factCache.TryGetValue((sessionId, typeof(T)), out var entry))
+        {
+            if (DateTimeOffset.UtcNow - entry.LastUpdated > _options.FactCacheTTL)
+            {
+                // Fact is stale, do not return it.
+                // Optionally, we could also remove it from the cache here.
+                _factCache.TryRemove((sessionId, typeof(T)), out _);
+                return null;
+            }
+            return entry.Fact as T;
+        }
+        return null;
+    }
+    ```
+    This approach is efficient as it avoids a background timer, performing the check only when data is requested. It also self-heals by removing the expired entry.
+
+**API Changes:**
+*   **Added:** A new configuration property `HmonOrchestratorOptions.FactCacheTTL`.
+*   **Modified (Behavioral):** The `GetFact<T>()` and `GetFactWithTimestamp()` methods will now return `null` if the cached fact is older than the configured TTL. This is a subtle but important behavioral change that enhances correctness.
+
+**Impact and Risks:**
+*   **Positive:** Prevents consumers from acting on stale data, significantly improving the correctness and reliability of any application built on the library.
+*   **Negative:** A minor behavioral breaking change. Consumers who assumed `GetFact<T>()` would always return a value after the first poll will now need to handle `null` responses for expired data. This is a positive change for correctness and should be highlighted in release notes.
+
+**Alternatives Considered:**
+*   **Background Scavenger Task:** A `Timer` could periodically scan the `_factCache` and remove expired items. This was rejected as being more complex and resource-intensive than the simple, on-demand check-on-read approach, which achieves the same goal with lower overhead.
+
+---
+
+#### **Feature Brief #4: Add Configurable, Per-Command Timeouts to the Orchestrator**
+
+**Problem Statement:**
+The public interaction methods on `HmonOrchestrator` (e.g., `GetFactsAsync`, `SubscribeAsync`) rely solely on a `CancellationToken` for timing out. If an interpreter becomes unresponsive in a way that doesn't close the TCP socket, a command sent without a CancellationToken (or with a long-lived one) can hang indefinitely, blocking the calling thread. The library should provide a built-in safety net against this scenario.
+
+**Proposed Solution:**
+We will introduce a default timeout at the orchestrator level and allow it to be overridden on a per-call basis.
+
+1.  **Configuration:** Add a default timeout property to `HmonOrchestratorOptions`.
+    ```csharp
+    // In HmonOrchestratorOptions.cs
+    public record HmonOrchestratorOptions
+    {
+        // ... existing properties
+        public TimeSpan DefaultCommandTimeout { get; init; } = TimeSpan.FromSeconds(30);
+    }
+    ```
+2.  **API Overloads:** Update the signatures of all asynchronous interaction methods to accept an optional `TimeSpan? timeout` parameter.
+    ```csharp
+    // Example in HmonOrchestrator.cs
+    public Task<FactsResponse> GetFactsAsync(
+        Guid sessionId,
+        IEnumerable<FactType> facts,
+        TimeSpan? timeout = null, // New parameter
+        CancellationToken ct = default);
+    ```3.  **Internal Implementation:** Internally, these methods will create a linked `CancellationTokenSource` that combines the user-provided `CancellationToken` with a new `CancellationTokenSource` set to the specified timeout (or the default).
+    ```csharp
+    // Example implementation detail
+    var effectiveTimeout = timeout ?? _options.DefaultCommandTimeout;
+    using var timeoutCts = new CancellationTokenSource(effectiveTimeout);
+    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
+    
+    // Pass linkedCts.Token to SendCommandAsync
+    var evt = await conn.SendCommandAsync<FactsReceivedEvent>("GetFacts", payload, linkedCts.Token);
+    ```
+    If the command times out, it will now throw an `OperationCanceledException` that can be caught and handled appropriately.
+
+**API Changes:**
+*   **Added:** A new configuration property `HmonOrchestratorOptions.DefaultCommandTimeout`.
+*   **Added:** A new optional `TimeSpan? timeout` parameter to all relevant public methods: `GetFactsAsync`, `GetLastKnownStateAsync`, `PollFactsAsync`, `StopFactsPollingAsync`, `BumpFactsAsync`, `SubscribeAsync`, `ConnectRideAsync`, `DisconnectRideAsync`.
+
+**Impact and Risks:**
+*   **Positive:** Greatly improves the resilience and predictability of the client library. It prevents application threads from hanging on unresponsive network endpoints and provides a clear, configurable timeout mechanism.
+*   **Negative:** None. This is a non-breaking, purely additive change to the API.
+
+**Alternatives Considered:**
+*   **Relying solely on `CancellationToken`:** This was rejected because it places the full burden of timeout management on every single consumer, making the library harder to use safely. Providing a sensible default is a better practice.
+
+---
+
+#### **Feature Brief #5: Refactor OTEL Logging to use Serilog Enrichers**
+
+**Problem Statement:**
+The `Dyalog.Hmon.OtelAdapter` project currently uses a custom static class, `ScopedLoggerExtensions`, to add contextual properties (like `session.id`, `host.name`) to its log records. While this works, it is not the idiomatic or most effective way to handle contextual logging with Serilog. It requires developers to remember to use the special `Log...WithContext` methods and manually pass a dictionary of properties for every log call.
+
+**Proposed Solution:**
+We will refactor the logging implementation to use Serilog's built-in context enrichment features, which are more powerful, maintainable, and aligned with best practices.
+
+1.  **Remove Custom Extension:** The `Dyalog.Hmon.OtelAdapter/LoggerExtensions.cs` file will be deleted.
+2.  **Configure LogContext:** In `Program.cs`, the Serilog `LoggerConfiguration` will be updated to include the context enricher.
+    ```csharp
+    // In Program.cs
+    Log.Logger = new LoggerConfiguration()
+        .MinimumLevel.Is(...)
+        .Enrich.FromLogContext() // Add this line
+        .WriteTo.Console(...)
+        .CreateLogger();
+    ```
+3.  **Use `LogContext` for Scoping:** In `AdapterService.cs`, wrap the event processing logic for a single HMON event in a `using` block that pushes all relevant session properties into the `LogContext`.
+    ```csharp
+    // In AdapterService.cs, inside ProcessEventsAsync loop
+    var sessionTags = ... // Get the tags for the session
+    using (LogContext.PushProperty("SessionId", hmonEvent.SessionId))
+    using (LogContext.Push(...)) // Push other relevant properties
+    {
+        // All logging calls within this block will be automatically enriched
+        switch (hmonEvent)
+        {
+            case FactsReceivedEvent e:
+                 // Now just call the standard logger method
+                 _otelLogger.LogInformation("Processing {FactCount} facts", e.Facts.Facts.Count());
+                 break;
+            // ... other cases
+        }
+    }
+    ```
+    All calls to the old `_otelLogger.LogInformationWithContext(...)` will be replaced with standard `_otelLogger.LogInformation(...)` calls.
+
+**API Changes:**
+None. This is a purely internal refactoring of the adapter's implementation.
+
+**Impact and Risks:**
+*   **Positive:** Aligns the project with standard Serilog practices. Logging code becomes cleaner, as the enrichment is handled automatically by the context. It removes the need for the custom extension class, reducing bespoke code and maintenance.
+*   **Negative:** None.
+
+**Alternatives Considered:**
+*   **Continue using the custom extension methods:** Rejected because it's non-standard, more verbose for developers, and less flexible than using Serilog's built-in context features.
