@@ -346,11 +346,21 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
     await _eventChannel.Reader.Completion;
   }
   /// <summary>
-  /// Gets the latest fact of type T for a session, or null if not available.
+  /// Gets the latest fact of type T for a session.
+  /// Returns null if the fact is not in the cache or if the cached fact is older than the configured FactCacheTTL.
   /// </summary>
   public T? GetFact<T>(Guid sessionId) where T : Fact
   {
-    return _factCache.TryGetValue((sessionId, typeof(T)), out var entry) ? entry.Fact as T : null;
+    if (_factCache.TryGetValue((sessionId, typeof(T)), out var entry))
+    {
+        if (DateTimeOffset.UtcNow - entry.LastUpdated > _options.FactCacheTTL)
+        {
+            _factCache.TryRemove((sessionId, typeof(T)), out _);
+            return null;
+        }
+        return entry.Fact as T;
+    }
+    return null;
   }
   /// <summary>
   /// Gets the latest fact for a session and fact type, or null if not available.
@@ -360,12 +370,20 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
     return _factCache.TryGetValue((sessionId, factType), out var entry) ? entry.Fact : null;
   }
   /// <summary>
-  /// Gets the latest fact and timestamp for a session and fact type, or null if not available.
+  /// Gets the latest fact and its update timestamp.
+  /// Returns (null, null) if the fact is not in the cache or if the cached fact is older than the configured FactCacheTTL.
   /// </summary>
   public (T? Fact, DateTimeOffset? LastUpdated) GetFactWithTimestamp<T>(Guid sessionId) where T : Fact
   {
     if (_factCache.TryGetValue((sessionId, typeof(T)), out var entry))
-      return (entry.Fact as T, entry.LastUpdated);
+    {
+        if (DateTimeOffset.UtcNow - entry.LastUpdated > _options.FactCacheTTL)
+        {
+            _factCache.TryRemove((sessionId, typeof(T)), out _);
+            return (null, null);
+        }
+        return (entry.Fact as T, entry.LastUpdated);
+    }
     return (null, null);
   }
   /// <summary>
