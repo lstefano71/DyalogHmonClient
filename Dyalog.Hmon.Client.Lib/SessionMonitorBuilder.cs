@@ -46,10 +46,10 @@ public class SessionMonitorBuilder(HmonOrchestrator orchestrator, Guid sessionId
   public async Task StartAsync()
   {
     if (_subscriptions.Count > 0)
-      await _orchestrator.SubscribeAsync(_sessionId, _subscriptions, _cancellationToken);
+      await _orchestrator.SubscribeAsync(_sessionId, _subscriptions, null, _cancellationToken);
 
     if (_pollFacts.Count > 0 && _pollInterval.HasValue)
-      await _orchestrator.PollFactsAsync(_sessionId, _pollFacts, _pollInterval.Value, _cancellationToken);
+      await _orchestrator.PollFactsAsync(_sessionId, _pollFacts, _pollInterval.Value, null, _cancellationToken);
 
     // Attach event handlers
     var eventTask = Task.Run(async () => {
