@@ -9,6 +9,7 @@ _Last reviewed: 2025-07-17 17:50 CEST_
 - Preferences for logging (Serilog), CLI (SpectreConsole), and embedded database (SQLite) remain unchanged.
 
 ## Next Steps
+- Implement and use typed, specific exceptions for error handling (Feature Brief #2).
 - Implement adapter logic for HMON-to-OTEL translation.
 - Thoroughly test handshake, interaction API, and connection reliability, including error/failure scenarios.
 - Write and run unit/integration tests for new error handling.

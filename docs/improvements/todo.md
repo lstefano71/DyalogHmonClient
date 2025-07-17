@@ -13,11 +13,11 @@ This list is prioritized to tackle the most critical correctness issues first, f
 
 - [x] **Feature Brief #1:** Introduce the Polly library for resilient connection retries.
 - [x] **Feature Brief #2:** Implement and use typed, specific exceptions for error handling.
-- [ ] **Feature Brief #3:** Implement a fact caching policy with TTL to prevent stale data.
+- [x] **Feature Brief #3:** Implement a fact caching policy with TTL to prevent stale data.
 
 ## Phase 3: Long-Term Architectural Refactoring (Library)
 
-- [ ] **ADR #1:** Refactor the `HmonOrchestrator` to use a single, unified event stream, deprecating the dual-event model. *(Note: This is a breaking change and should be scheduled for a major version release, e.g., v2.0).*
+- [x] **ADR #1:** Refactor the `HmonOrchestrator` to use a single, unified event stream, deprecating the dual-event model. *(Note: This is a breaking change and should be scheduled for a major version release, e.g., v2.0).*
 
 ## Phase 4: Code Quality and Developer Experience
 
