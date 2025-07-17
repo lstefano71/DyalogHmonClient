@@ -145,50 +145,79 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
     }
   }
   /// <summary>
-  /// Requests a one-time snapshot of facts from the interpreter.
+  /// A private helper to send a command, await a specific event response, and handle timeouts and exceptions.
   /// </summary>
-  /// <param name="sessionId">Session ID.</param>
-  /// <param name="facts">Facts to retrieve.</param>
-  /// <param name="ct">Cancellation token.</param>
-  /// <exception cref="SessionNotFoundException">Thrown if the specified sessionId does not match an active, connected session.</exception>
-  public async Task<FactsResponse> GetFactsAsync(Guid sessionId, IEnumerable<FactType> facts, CancellationToken ct = default)
+  /// <typeparam name="TResponseEvent">The expected HmonEvent type in response to the command.</typeparam>
+  /// <param name="sessionId">The ID of the target session.</param>
+  /// <param name="commandName">The name of the HMON command to send.</param>
+  /// <param name="payload">The payload object for the command.</param>
+  /// <param name="timeoutOverride">An optional timeout to override the default.</param>
+  /// <param name="userCt">The user-provided cancellation token.</param>
+  /// <returns>The received event of the specified type.</returns>
+  /// <exception cref="SessionNotFoundException">Thrown if the sessionId is not valid or connected.</exception>
+  /// <exception cref="CommandTimeoutException">Thrown if the command does not receive a response within the effective timeout.</exception>
+  /// <exception cref="HmonConnectionException">Thrown for other underlying connection or protocol errors.</exception>
+  private async Task<TResponseEvent> SendCommandAndAwaitResponseAsync<TResponseEvent>(
+      Guid sessionId,
+      string commandName,
+      object payload,
+      TimeSpan? timeoutOverride,
+      CancellationToken userCt) where TResponseEvent : HmonEvent
   {
     if (!_connections.TryGetValue(sessionId, out var conn)) {
-      var ex = new SessionNotFoundException(sessionId);
-      Serilog.Log.Logger.ForContext<HmonOrchestrator>().Error("GetFactsAsync: Session not found for sessionId={SessionId}", sessionId);
-      OnError?.Invoke(ex, sessionId);
-      throw ex;
+      OnError?.Invoke(new SessionNotFoundException(sessionId), sessionId);
+      throw new SessionNotFoundException(sessionId);
     }
-    var payload = new GetFactsPayload([.. facts.Select(f => (int)f)]);
+    var effectiveTimeout = timeoutOverride ?? _options.DefaultCommandTimeout;
+    using var timeoutCts = new CancellationTokenSource(effectiveTimeout);
+    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(userCt, timeoutCts.Token);
     try {
-      var evt = await conn.SendCommandAsync<FactsReceivedEvent>("GetFacts", payload, ct);
-      return evt.Facts;
-    } catch (Exception ex) {
-      OnError?.Invoke(ex, sessionId);
-      throw;
+      return await conn.SendCommandAsync<TResponseEvent>(commandName, payload, linkedCts.Token);
+    } catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !userCt.IsCancellationRequested) {
+      throw new CommandTimeoutException(commandName, effectiveTimeout);
     }
   }
+  /// <summary>
+  /// Requests a one-time, guaranteed-fresh snapshot of facts from the interpreter.
+  /// This method will always perform a network request.
+  /// </summary>
+  /// <param name="sessionId">The ID of the target session.</param>
+  /// <param name="facts">An enumeration of the facts to retrieve.</param>
+  /// <param name="timeout">An optional timeout for this specific command. If null, the default timeout will be used.</param>
+  /// <param name="ct">A cancellation token for the operation.</param>
+  /// <returns>A task that represents the asynchronous operation. The task result contains the requested facts.</returns>
+  /// <exception cref="SessionNotFoundException">Thrown if the specified sessionId does not match an active, connected session.</exception>
+  /// <exception cref="CommandTimeoutException">Thrown if the interpreter does not respond within the effective timeout.</exception>
+  /// <exception cref="HmonConnectionException">Thrown for underlying connection or protocol errors during the command.</exception>
+  public async Task<FactsResponse> GetFactsAsync(
+      Guid sessionId,
+      IEnumerable<FactType> facts,
+      TimeSpan? timeout = null,
+      CancellationToken ct = default)
+  {
+    var payload = new GetFactsPayload([.. facts.Select(f => (int)f)]);
+    var factsReceivedEvent = await SendCommandAndAwaitResponseAsync<FactsReceivedEvent>(
+        sessionId,
+        "GetFacts",
+        payload,
+        timeout,
+        ct
+    );
+    return factsReceivedEvent.Facts;
+  }
+
   /// <summary>
   /// Requests a high-priority status report from the interpreter.
   /// </summary>
   /// <param name="sessionId">Session ID.</param>
+  /// <param name="timeout">Optional timeout for this command.</param>
   /// <param name="ct">Cancellation token.</param>
   /// <exception cref="SessionNotFoundException">Thrown if the specified sessionId does not match an active, connected session.</exception>
-  public async Task<LastKnownStateResponse> GetLastKnownStateAsync(Guid sessionId, CancellationToken ct = default)
+  public async Task<LastKnownStateResponse> GetLastKnownStateAsync(Guid sessionId, TimeSpan? timeout = null, CancellationToken ct = default)
   {
-    if (!_connections.TryGetValue(sessionId, out var conn)) {
-      var ex = new SessionNotFoundException(sessionId);
-      OnError?.Invoke(ex, sessionId);
-      throw ex;
-    }
     var payload = new LastKnownStatePayload();
-    try {
-      var evt = await conn.SendCommandAsync<LastKnownStateReceivedEvent>("GetLastKnownState", payload, ct);
-      return evt.State;
-    } catch (Exception ex) {
-      OnError?.Invoke(ex, sessionId);
-      throw;
-    }
+    var evt = await SendCommandAndAwaitResponseAsync<LastKnownStateReceivedEvent>(sessionId, "GetLastKnownState", payload, timeout, ct);
+    return evt.State;
   }
   /// <summary>
   /// Starts polling facts from the interpreter at a given interval.
@@ -196,86 +225,50 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   /// <param name="sessionId">Session ID.</param>
   /// <param name="facts">Facts to poll.</param>
   /// <param name="interval">Polling interval.</param>
+  /// <param name="timeout">Optional timeout for this command.</param>
   /// <param name="ct">Cancellation token.</param>
   /// <exception cref="SessionNotFoundException">Thrown if the specified sessionId does not match an active, connected session.</exception>
-  public async Task<FactsReceivedEvent> PollFactsAsync(Guid sessionId, IEnumerable<FactType> facts, TimeSpan interval, CancellationToken ct = default)
+  public async Task<FactsReceivedEvent> PollFactsAsync(Guid sessionId, IEnumerable<FactType> facts, TimeSpan interval, TimeSpan? timeout = null, CancellationToken ct = default)
   {
-    if (!_connections.TryGetValue(sessionId, out var conn)) {
-      var ex = new SessionNotFoundException(sessionId);
-      OnError?.Invoke(ex, sessionId);
-      throw ex;
-    }
     var payload = new PollFactsPayload([.. facts.Select(f => (int)f)], (int)interval.TotalMilliseconds);
-    try {
-      return await conn.SendCommandAsync<FactsReceivedEvent>("PollFacts", payload, ct);
-    } catch (Exception ex) {
-      OnError?.Invoke(ex, sessionId);
-      throw;
-    }
+    return await SendCommandAndAwaitResponseAsync<FactsReceivedEvent>(sessionId, "PollFacts", payload, timeout, ct);
   }
   /// <summary>
   /// Stops any active facts polling for the given session.
   /// </summary>
   /// <param name="sessionId">Session ID.</param>
+  /// <param name="timeout">Optional timeout for this command.</param>
   /// <param name="ct">Cancellation token.</param>
   /// <exception cref="SessionNotFoundException">Thrown if the specified sessionId does not match an active, connected session.</exception>
-  public async Task StopFactsPollingAsync(Guid sessionId, CancellationToken ct = default)
+  public async Task StopFactsPollingAsync(Guid sessionId, TimeSpan? timeout = null, CancellationToken ct = default)
   {
-    if (!_connections.TryGetValue(sessionId, out var conn)) {
-      var ex = new SessionNotFoundException(sessionId);
-      OnError?.Invoke(ex, sessionId);
-      throw ex;
-    }
     var payload = new { };
-    try {
-      await conn.SendCommandAsync<FactsReceivedEvent>("StopFacts", payload, ct);
-    } catch (Exception ex) {
-      OnError?.Invoke(ex, sessionId);
-      throw;
-    }
+    await SendCommandAndAwaitResponseAsync<FactsReceivedEvent>(sessionId, "StopFacts", payload, timeout, ct);
   }
   /// <summary>
   /// Triggers an immediate facts message from an active poll.
   /// </summary>
   /// <param name="sessionId">Session ID.</param>
+  /// <param name="timeout">Optional timeout for this command.</param>
   /// <param name="ct">Cancellation token.</param>
   /// <exception cref="SessionNotFoundException">Thrown if the specified sessionId does not match an active, connected session.</exception>
-  public async Task BumpFactsAsync(Guid sessionId, CancellationToken ct = default)
+  public async Task BumpFactsAsync(Guid sessionId, TimeSpan? timeout = null, CancellationToken ct = default)
   {
-    if (!_connections.TryGetValue(sessionId, out var conn)) {
-      var ex = new SessionNotFoundException(sessionId);
-      OnError?.Invoke(ex, sessionId);
-      throw ex;
-    }
     var payload = new { };
-    try {
-      await conn.SendCommandAsync<FactsReceivedEvent>("BumpFacts", payload, ct);
-    } catch (Exception ex) {
-      OnError?.Invoke(ex, sessionId);
-      throw;
-    }
+    await SendCommandAndAwaitResponseAsync<FactsReceivedEvent>(sessionId, "BumpFacts", payload, timeout, ct);
   }
   /// <summary>
   /// Subscribes to interpreter events for the given session.
   /// </summary>
   /// <param name="sessionId">Session ID.</param>
   /// <param name="events">Events to subscribe to.</param>
+  /// <param name="timeout">Optional timeout for this command.</param>
   /// <param name="ct">Cancellation token.</param>
   /// <exception cref="SessionNotFoundException">Thrown if the specified sessionId does not match an active, connected session.</exception>
-  public async Task<SubscribedResponseReceivedEvent> SubscribeAsync(Guid sessionId, IEnumerable<SubscriptionEvent> events, CancellationToken ct = default)
+  public async Task<SubscribedResponseReceivedEvent> SubscribeAsync(Guid sessionId, IEnumerable<SubscriptionEvent> events, TimeSpan? timeout = null, CancellationToken ct = default)
   {
-    if (!_connections.TryGetValue(sessionId, out var conn)) {
-      var ex = new SessionNotFoundException(sessionId);
-      OnError?.Invoke(ex, sessionId);
-      throw ex;
-    }
     var payload = new SubscribePayload([.. events.Select(e => (int)e)]);
-    try {
-      return await conn.SendCommandAsync<SubscribedResponseReceivedEvent>("Subscribe", payload, ct);
-    } catch (Exception ex) {
-      OnError?.Invoke(ex, sessionId);
-      throw;
-    }
+    return await SendCommandAndAwaitResponseAsync<SubscribedResponseReceivedEvent>(sessionId, "Subscribe", payload, timeout, ct);
   }
   /// <summary>
   /// Requests the interpreter to connect to a RIDE client.
@@ -283,49 +276,31 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   /// <param name="sessionId">Session ID.</param>
   /// <param name="address">RIDE address.</param>
   /// <param name="port">RIDE port.</param>
+  /// <param name="timeout">Optional timeout for this command.</param>
   /// <param name="ct">Cancellation token.</param>
   /// <exception cref="SessionNotFoundException">Thrown if the specified sessionId does not match an active, connected session.</exception>
-  public async Task<RideConnectionResponse> ConnectRideAsync(Guid sessionId, string address, int port, CancellationToken ct = default)
+  public async Task<RideConnectionResponse> ConnectRideAsync(Guid sessionId, string address, int port, TimeSpan? timeout = null, CancellationToken ct = default)
   {
-    if (!_connections.TryGetValue(sessionId, out var conn)) {
-      var ex = new SessionNotFoundException(sessionId);
-      OnError?.Invoke(ex, sessionId);
-      throw ex;
-    }
     var payload = new {
       Address = address,
       Port = port,
       UID = Guid.NewGuid().ToString()
     };
-    try {
-      var evt = await conn.SendCommandAsync<RideConnectionReceivedEvent>("ConnectRide", payload, ct);
-      return evt.Response;
-    } catch (Exception ex) {
-      OnError?.Invoke(ex, sessionId);
-      throw;
-    }
+    var evt = await SendCommandAndAwaitResponseAsync<RideConnectionReceivedEvent>(sessionId, "ConnectRide", payload, timeout, ct);
+    return evt.Response;
   }
   /// <summary>
   /// Requests the interpreter to disconnect from any RIDE client.
   /// </summary>
   /// <param name="sessionId">Session ID.</param>
+  /// <param name="timeout">Optional timeout for this command.</param>
   /// <param name="ct">Cancellation token.</param>
   /// <exception cref="SessionNotFoundException">Thrown if the specified sessionId does not match an active, connected session.</exception>
-  public async Task<RideConnectionResponse> DisconnectRideAsync(Guid sessionId, CancellationToken ct = default)
+  public async Task<RideConnectionResponse> DisconnectRideAsync(Guid sessionId, TimeSpan? timeout = null, CancellationToken ct = default)
   {
-    if (!_connections.TryGetValue(sessionId, out var conn)) {
-      var ex = new SessionNotFoundException(sessionId);
-      OnError?.Invoke(ex, sessionId);
-      throw ex;
-    }
     var payload = new { };
-    try {
-      var evt = await conn.SendCommandAsync<RideConnectionReceivedEvent>("ConnectRide", payload, ct);
-      return evt.Response;
-    } catch (Exception ex) {
-      OnError?.Invoke(ex, sessionId);
-      throw;
-    }
+    var evt = await SendCommandAndAwaitResponseAsync<RideConnectionReceivedEvent>(sessionId, "ConnectRide", payload, timeout, ct);
+    return evt.Response;
   }
   /// <summary>
   /// Disposes all managed connections and resources.
@@ -351,14 +326,12 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   /// </summary>
   public T? GetFact<T>(Guid sessionId) where T : Fact
   {
-    if (_factCache.TryGetValue((sessionId, typeof(T)), out var entry))
-    {
-        if (DateTimeOffset.UtcNow - entry.LastUpdated > _options.FactCacheTTL)
-        {
-            _factCache.TryRemove((sessionId, typeof(T)), out _);
-            return null;
-        }
-        return entry.Fact as T;
+    if (_factCache.TryGetValue((sessionId, typeof(T)), out var entry)) {
+      if (DateTimeOffset.UtcNow - entry.LastUpdated > _options.FactCacheTTL) {
+        _factCache.TryRemove((sessionId, typeof(T)), out _);
+        return null;
+      }
+      return entry.Fact as T;
     }
     return null;
   }
@@ -375,14 +348,12 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   /// </summary>
   public (T? Fact, DateTimeOffset? LastUpdated) GetFactWithTimestamp<T>(Guid sessionId) where T : Fact
   {
-    if (_factCache.TryGetValue((sessionId, typeof(T)), out var entry))
-    {
-        if (DateTimeOffset.UtcNow - entry.LastUpdated > _options.FactCacheTTL)
-        {
-            _factCache.TryRemove((sessionId, typeof(T)), out _);
-            return (null, null);
-        }
-        return (entry.Fact as T, entry.LastUpdated);
+    if (_factCache.TryGetValue((sessionId, typeof(T)), out var entry)) {
+      if (DateTimeOffset.UtcNow - entry.LastUpdated > _options.FactCacheTTL) {
+        _factCache.TryRemove((sessionId, typeof(T)), out _);
+        return (null, null);
+      }
+      return (entry.Fact as T, entry.LastUpdated);
     }
     return (null, null);
   }

@@ -22,6 +22,12 @@ public record HmonOrchestratorOptions
     /// Defaults to 5 minutes.
     /// </summary>
     public TimeSpan FactCacheTTL { get; init; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// The default timeout for all commands sent to the interpreter.
+    /// This prevents calls from hanging indefinitely. Defaults to 30 seconds.
+    /// </summary>
+    public TimeSpan DefaultCommandTimeout { get; init; } = TimeSpan.FromSeconds(30);
 }
 public record RetryPolicy
 {
