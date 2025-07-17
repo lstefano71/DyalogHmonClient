@@ -9,7 +9,6 @@ _Last reviewed: 2025-07-17 17:50 CEST_
 - Preferences for logging (Serilog), CLI (SpectreConsole), and embedded database (SQLite) remain unchanged.
 
 ## Next Steps
-- Implement and use typed, specific exceptions for error handling (Feature Brief #2).
 - Implement adapter logic for HMON-to-OTEL translation.
 - Thoroughly test handshake, interaction API, and connection reliability, including error/failure scenarios.
 - Write and run unit/integration tests for new error handling.
@@ -30,8 +29,7 @@ _Last reviewed: 2025-07-17 17:50 CEST_
 - Unit and integration tests for core logic and orchestrator API.
 
 ## Recent Changes
-- Feature Brief #4: Configurable, per-command timeouts implemented in HmonOrchestrator and archived; documentation and todo list updated.
-- Feature Brief #2: Typed, specific exceptions for error handling implemented and documented.
-- docs/improvements/todo.md updated to mark Feature Brief #2 as complete.
+- Feature Brief #1: Polly-based retry logic for connection management implemented in ServerConnection.cs.
+- docs/improvements/todo.md updated to mark Feature Brief #1 as complete.
 - Memory bank and TODOs reviewed and updated.
 - Project context and requirements confirmed.
