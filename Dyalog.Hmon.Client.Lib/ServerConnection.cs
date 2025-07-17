@@ -1,6 +1,8 @@
 using Serilog;
-
+using Polly;
+using Polly.Retry;
 using System.Net.Sockets;
+using System.IO;
 using System.Threading.Channels;
 
 namespace Dyalog.Hmon.Client.Lib;
@@ -60,50 +62,62 @@ internal class ServerConnection : IAsyncDisposable
   private async Task ConnectWithRetriesAsync(CancellationToken ct)
   {
     var retryPolicy = _options.ConnectionRetryPolicy;
-    var delay = retryPolicy.InitialDelay;
     var logger = Log.Logger.ForContext<ServerConnection>();
 
-    while (!ct.IsCancellationRequested) {
-      try {
-        logger.Debug("Attempting to connect to {Host}:{Port} (SessionId={SessionId})", _host, _port, _sessionId);
-        var tcpClient = new TcpClient();
-        await tcpClient.ConnectAsync(_host, _port, ct);
-
-        logger.Information("Connection established to {Host}:{Port} (SessionId={SessionId})", _host, _port, _sessionId);
-
-        // Only after handshake, consider connection established
-        _hmonConnection = new HmonConnection(
-            tcpClient,
-            _sessionId,
-            _eventWriter,
-            async () => {
-              logger.Debug("Connection closed for {Host}:{Port} (SessionId={SessionId}), attempting reconnect", _host, _port, _sessionId);
-              if (_onClientDisconnected != null) {
-                await _onClientDisconnected.Invoke(new ClientDisconnectedEventArgs(_sessionId, _host, _port, _friendlyName, "Connection closed"));
-              }
-              await ConnectWithRetriesAsync(ct); // Reconnect
-            },
-            _onClientConnected // Pass the ClientConnected event handler
-        );
-
-        // Register the connection in the orchestrator before firing ClientConnected
-        _registerConnection?.Invoke(_hmonConnection);
-
-        // Initialize the HmonConnection, which will also fire ClientConnected
-        await _hmonConnection.InitializeAsync(_host, _port, _friendlyName, ct);
-
-        return; // Connection successful, exit the retry loop.
-      } catch (Exception ex) {
-        logger.Error(ex, "Connection attempt failed to {Host}:{Port} (SessionId={SessionId}), retrying in {Delay}ms", _host, _port, _sessionId, delay.TotalMilliseconds);
-        if (_onClientDisconnected != null) {
-          await _onClientDisconnected.Invoke(new ClientDisconnectedEventArgs(_sessionId, _host, _port, _friendlyName, ex.Message));
+    // Polly retry policy with exponential backoff and jitter
+    AsyncRetryPolicy retryPolicyWithJitter = Policy
+      .Handle<SocketException>()
+      .Or<IOException>()
+      .Or<OperationCanceledException>(ex => !ct.IsCancellationRequested)
+      .WaitAndRetryAsync(
+        retryCount: int.MaxValue,
+        sleepDurationProvider: attempt =>
+        {
+          // Exponential backoff with jitter
+          var baseDelay = retryPolicy.InitialDelay.TotalMilliseconds * Math.Pow(retryPolicy.BackoffMultiplier, attempt - 1);
+          var cappedDelay = Math.Min(baseDelay, retryPolicy.MaxDelay.TotalMilliseconds);
+          var jitter = Random.Shared.NextDouble() * cappedDelay * 0.2; // up to 20% jitter
+          return TimeSpan.FromMilliseconds(cappedDelay + jitter);
+        },
+        onRetry: (exception, timespan, attempt, context) =>
+        {
+          logger.Error(exception, "Connection attempt {Attempt} failed to {Host}:{Port} (SessionId={SessionId}), retrying in {Delay}ms",
+            attempt, _host, _port, _sessionId, timespan.TotalMilliseconds);
         }
+      );
 
-        await Task.Delay(delay, ct);
-        delay = TimeSpan.FromMilliseconds(delay.TotalMilliseconds * retryPolicy.BackoffMultiplier);
-        if (delay > retryPolicy.MaxDelay) delay = retryPolicy.MaxDelay;
-      }
-    }
+    await retryPolicyWithJitter.ExecuteAsync(async () =>
+    {
+      ct.ThrowIfCancellationRequested();
+      logger.Debug("Attempting to connect to {Host}:{Port} (SessionId={SessionId})", _host, _port, _sessionId);
+      var tcpClient = new TcpClient();
+      await tcpClient.ConnectAsync(_host, _port, ct);
+
+      logger.Information("Connection established to {Host}:{Port} (SessionId={SessionId})", _host, _port, _sessionId);
+
+      // Only after handshake, consider connection established
+      _hmonConnection = new HmonConnection(
+          tcpClient,
+          _sessionId,
+          _eventWriter,
+          async () => {
+            logger.Debug("Connection closed for {Host}:{Port} (SessionId={SessionId}), attempting reconnect", _host, _port, _sessionId);
+            if (_onClientDisconnected != null) {
+              await _onClientDisconnected.Invoke(new ClientDisconnectedEventArgs(_sessionId, _host, _port, _friendlyName, "Connection closed"));
+            }
+            await ConnectWithRetriesAsync(ct); // Reconnect
+          },
+          _onClientConnected // Pass the ClientConnected event handler
+      );
+
+      // Register the connection in the orchestrator before firing ClientConnected
+      _registerConnection?.Invoke(_hmonConnection);
+
+      // Initialize the HmonConnection, which will also fire ClientConnected
+      await _hmonConnection.InitializeAsync(_host, _port, _friendlyName, ct);
+
+      // If we reach here, connection is successful; break retry loop by returning
+    });
   }
 
   /// <summary>

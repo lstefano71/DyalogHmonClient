@@ -1,15 +1,16 @@
 # Active Context: HMON-to-OTEL Adapter
 
-_Last reviewed: 2025-07-16 21:01 CEST_
+_Last reviewed: 2025-07-17 17:26 CEST_
 
 ## Current Focus
 - Project focus is on hmon-to-otel-adapter.
 - Adapter design and implementation to translate HMON events and metrics to OpenTelemetry format.
-- Memory bank and TODOs reviewed and confirmed up to date.
-- Ready to begin implementation of adapter logic as per docs/hmon-to-otel-adapter-PRD.md and TODO-hmonadapter.md.
+- Feature Brief #1 (Polly integration for resilient connection retries) completed.
+- Next focus: Feature Brief #2 (typed, specific exceptions for error handling).
 - Preferences for logging (Serilog), CLI (SpectreConsole), and embedded database (SQLite) remain unchanged.
 
 ## Next Steps
+- Implement and use typed, specific exceptions for error handling (Feature Brief #2).
 - Implement adapter logic for HMON-to-OTEL translation.
 - Thoroughly test handshake, interaction API, and connection reliability, including error/failure scenarios.
 - Add comprehensive XML documentation.
@@ -25,6 +26,7 @@ _Last reviewed: 2025-07-16 21:01 CEST_
 - Unit and integration tests for core logic and orchestrator API.
 
 ## Recent Changes
+- Feature Brief #1: Polly-based retry logic for connection management implemented in ServerConnection.cs.
+- docs/improvements/todo.md updated to mark Feature Brief #1 as complete.
 - Memory bank and TODOs reviewed and updated.
 - Project context and requirements confirmed.
-- Adapter implementation is the next priority.
