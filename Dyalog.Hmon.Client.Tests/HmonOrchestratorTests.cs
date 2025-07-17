@@ -1,4 +1,5 @@
 using Dyalog.Hmon.Client.Lib;
+using Dyalog.Hmon.Client.Lib.Exceptions;
 
 using Xunit;
 
@@ -42,7 +43,7 @@ public class HmonOrchestratorTests
   public async Task GetFactsAsync_ThrowsOnInvalidSession()
   {
     var orchestrator = new HmonOrchestrator();
-    await Assert.ThrowsAsync<System.InvalidOperationException>(async () => {
+    await Assert.ThrowsAsync<SessionNotFoundException>(async () => {
       await orchestrator.GetFactsAsync(System.Guid.NewGuid(), [FactType.Host]);
     });
   }
@@ -51,7 +52,7 @@ public class HmonOrchestratorTests
   public async Task SubscribeAsync_ThrowsOnInvalidSession()
   {
     var orchestrator = new HmonOrchestrator();
-    await Assert.ThrowsAsync<System.InvalidOperationException>(async () => {
+    await Assert.ThrowsAsync<SessionNotFoundException>(async () => {
       await orchestrator.SubscribeAsync(System.Guid.NewGuid(), [SubscriptionEvent.WorkspaceCompaction]);
     });
   }
