@@ -1,4 +1,5 @@
 using Serilog;
+using Dyalog.Hmon.Client.Lib.Exceptions;
 
 using System.Collections.Concurrent;
 using System.Net;
@@ -162,10 +163,11 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   /// <param name="sessionId">Session ID.</param>
   /// <param name="facts">Facts to retrieve.</param>
   /// <param name="ct">Cancellation token.</param>
+  /// <exception cref="SessionNotFoundException">Thrown if the specified sessionId does not match an active, connected session.</exception>
   public async Task<FactsResponse> GetFactsAsync(Guid sessionId, IEnumerable<FactType> facts, CancellationToken ct = default)
   {
     if (!_connections.TryGetValue(sessionId, out var conn)) {
-      var ex = new InvalidOperationException("Session not found");
+      var ex = new SessionNotFoundException(sessionId);
       Serilog.Log.Logger.ForContext<HmonOrchestrator>().Error("GetFactsAsync: Session not found for sessionId={SessionId}", sessionId);
       OnError?.Invoke(ex, sessionId);
       throw ex;
@@ -185,10 +187,11 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   /// </summary>
   /// <param name="sessionId">Session ID.</param>
   /// <param name="ct">Cancellation token.</param>
+  /// <exception cref="SessionNotFoundException">Thrown if the specified sessionId does not match an active, connected session.</exception>
   public async Task<LastKnownStateResponse> GetLastKnownStateAsync(Guid sessionId, CancellationToken ct = default)
   {
     if (!_connections.TryGetValue(sessionId, out var conn)) {
-      var ex = new InvalidOperationException("Session not found");
+      var ex = new SessionNotFoundException(sessionId);
       OnError?.Invoke(ex, sessionId);
       throw ex;
     }
@@ -209,10 +212,11 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   /// <param name="facts">Facts to poll.</param>
   /// <param name="interval">Polling interval.</param>
   /// <param name="ct">Cancellation token.</param>
+  /// <exception cref="SessionNotFoundException">Thrown if the specified sessionId does not match an active, connected session.</exception>
   public async Task<FactsReceivedEvent> PollFactsAsync(Guid sessionId, IEnumerable<FactType> facts, TimeSpan interval, CancellationToken ct = default)
   {
     if (!_connections.TryGetValue(sessionId, out var conn)) {
-      var ex = new InvalidOperationException("Session not found");
+      var ex = new SessionNotFoundException(sessionId);
       OnError?.Invoke(ex, sessionId);
       throw ex;
     }
@@ -230,10 +234,11 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   /// </summary>
   /// <param name="sessionId">Session ID.</param>
   /// <param name="ct">Cancellation token.</param>
+  /// <exception cref="SessionNotFoundException">Thrown if the specified sessionId does not match an active, connected session.</exception>
   public async Task StopFactsPollingAsync(Guid sessionId, CancellationToken ct = default)
   {
     if (!_connections.TryGetValue(sessionId, out var conn)) {
-      var ex = new InvalidOperationException("Session not found");
+      var ex = new SessionNotFoundException(sessionId);
       OnError?.Invoke(ex, sessionId);
       throw ex;
     }
@@ -251,10 +256,11 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   /// </summary>
   /// <param name="sessionId">Session ID.</param>
   /// <param name="ct">Cancellation token.</param>
+  /// <exception cref="SessionNotFoundException">Thrown if the specified sessionId does not match an active, connected session.</exception>
   public async Task BumpFactsAsync(Guid sessionId, CancellationToken ct = default)
   {
     if (!_connections.TryGetValue(sessionId, out var conn)) {
-      var ex = new InvalidOperationException("Session not found");
+      var ex = new SessionNotFoundException(sessionId);
       OnError?.Invoke(ex, sessionId);
       throw ex;
     }
@@ -273,10 +279,11 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   /// <param name="sessionId">Session ID.</param>
   /// <param name="events">Events to subscribe to.</param>
   /// <param name="ct">Cancellation token.</param>
+  /// <exception cref="SessionNotFoundException">Thrown if the specified sessionId does not match an active, connected session.</exception>
   public async Task<SubscribedResponseReceivedEvent> SubscribeAsync(Guid sessionId, IEnumerable<SubscriptionEvent> events, CancellationToken ct = default)
   {
     if (!_connections.TryGetValue(sessionId, out var conn)) {
-      var ex = new InvalidOperationException("Session not found");
+      var ex = new SessionNotFoundException(sessionId);
       OnError?.Invoke(ex, sessionId);
       throw ex;
     }
@@ -296,10 +303,11 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   /// <param name="address">RIDE address.</param>
   /// <param name="port">RIDE port.</param>
   /// <param name="ct">Cancellation token.</param>
+  /// <exception cref="SessionNotFoundException">Thrown if the specified sessionId does not match an active, connected session.</exception>
   public async Task<RideConnectionResponse> ConnectRideAsync(Guid sessionId, string address, int port, CancellationToken ct = default)
   {
     if (!_connections.TryGetValue(sessionId, out var conn)) {
-      var ex = new InvalidOperationException("Session not found");
+      var ex = new SessionNotFoundException(sessionId);
       OnError?.Invoke(ex, sessionId);
       throw ex;
     }
@@ -322,10 +330,11 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   /// </summary>
   /// <param name="sessionId">Session ID.</param>
   /// <param name="ct">Cancellation token.</param>
+  /// <exception cref="SessionNotFoundException">Thrown if the specified sessionId does not match an active, connected session.</exception>
   public async Task<RideConnectionResponse> DisconnectRideAsync(Guid sessionId, CancellationToken ct = default)
   {
     if (!_connections.TryGetValue(sessionId, out var conn)) {
-      var ex = new InvalidOperationException("Session not found");
+      var ex = new SessionNotFoundException(sessionId);
       OnError?.Invoke(ex, sessionId);
       throw ex;
     }
