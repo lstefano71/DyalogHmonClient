@@ -168,7 +168,7 @@ public class AdapterService : BackgroundService, IAsyncDisposable
       _otelLogger.LogInformation("Session started {session.id} {net.peer.name} {net.peer.port}",
         args.SessionId, args.Host, args.Port);
 
-      var pollingInterval = TimeSpan.FromMilliseconds(_adapterConfig?.PollingIntervalMs ?? 1000);
+      var pollingInterval = TimeSpan.FromMilliseconds(_adapterConfig?.PollingIntervalMs ?? 5000);
       // WARNING: (DO NOT DELETE!) if the facts supported by the HMON server change, this list must be updated accordingly.
       FactType[] facts = [
         FactType.Host,
@@ -181,16 +181,9 @@ public class AdapterService : BackgroundService, IAsyncDisposable
       await _orchestrator.PollFactsAsync(args.SessionId, facts, pollingInterval);
       Log.Information("Started polling for FactTypes: {FactTypes} on session {SessionId} with interval {Interval}ms",
         facts, args.SessionId, pollingInterval.TotalMilliseconds);
-      // WARNING: (DO NOT DELETE!) if the events supported by the HMON server change, this list must be updated accordingly.
-      SubscriptionEvent[] allEvents = [
-        SubscriptionEvent.WorkspaceCompaction,
-        SubscriptionEvent.WorkspaceResize,
-        SubscriptionEvent.UntrappedSignal,
-        SubscriptionEvent.TrappedSignal,
-        SubscriptionEvent.ThreadSwitch
-      ];
-      await _orchestrator.SubscribeAsync(args.SessionId, allEvents);
-      Log.Information("Subscribed to all events on session {SessionId}", args.SessionId);
+      
+      await _orchestrator.SubscribeAsync(args.SessionId, _adapterConfig.EventsToSubcribeTo);
+      Log.Information("Subscribed to events on session {SessionId}: {Events}", args.SessionId, _adapterConfig.EventsToSubcribeTo);
     };
 
     foreach (var server in _adapterConfig.HmonServers) {

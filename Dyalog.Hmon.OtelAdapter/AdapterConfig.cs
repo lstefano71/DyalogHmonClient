@@ -1,4 +1,6 @@
+using System.Collections.Immutable;
 using System.ComponentModel.DataAnnotations;
+using Dyalog.Hmon.Client.Lib;
 
 namespace Dyalog.Hmon.OtelAdapter;
 
@@ -30,6 +32,30 @@ public record AdapterConfig
   /// Optional: Polling listener configuration. If set, activates listener.
   /// </summary>
   public PollListenerConfig? PollListener { get; init; }
+
+  /// <summary>
+  /// List of events to subscribe to. If null or empty, defaults to all events.
+  /// </summary>
+  public List<SubscriptionEvent>? SubscribedEvents { get; set; } = [];
+    
+      /// <summary>
+  /// Gets the effective list of subscribed events.
+  /// If the list was provided in the configuration, that list is used.
+  /// Otherwise, a default list of events is returned.
+  /// </summary>
+  [System.Text.Json.Serialization.JsonIgnore] // Prevents this from being serialized
+    public IReadOnlyList<SubscriptionEvent> EventsToSubcribeTo =>
+        SubscribedEvents is { Count: > 0 } // Check if the list from config is not null and not empty
+            ? SubscribedEvents
+            :
+            // Otherwise, return the default list
+            [
+                SubscriptionEvent.WorkspaceCompaction,
+                SubscriptionEvent.WorkspaceResize,
+                SubscriptionEvent.UntrappedSignal,
+                SubscriptionEvent.TrappedSignal,
+                SubscriptionEvent.ThreadSwitch
+            ];
 }
 
 public record HmonServerConfig

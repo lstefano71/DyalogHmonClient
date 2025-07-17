@@ -7,7 +7,7 @@ This list is prioritized to tackle the most critical correctness issues first, f
 - [x] **Issue #1:** Fix incorrect metric types in the OTEL adapter (Gauges to Counters).
 - [x] **Issue #2:** Fix memory leak and stale data by removing disconnected sessions from the metrics dictionary.
 - [x] **Issue #3:** Fix incomplete log enrichment for signal notifications.
-- [ ] **Issue #4:** Implement configuration for polling and subscription settings, removing hardcoded values.
+- [x] **Issue #4:** Implement configuration for polling and subscription settings, removing hardcoded values.
 
 ## Phase 2: Robustness and API Improvements (Library & Adapter)
 

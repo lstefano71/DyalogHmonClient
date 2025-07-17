@@ -16,5 +16,6 @@
     "Endpoint": "http://localhost:4317"
   },
   "LogLevel": "Debug",
-  "MeterName": "HMON"
+  "MeterName": "HMON",
+  "SubscribedEvents": ["UntrappedSignal", "TrappedSignal"]
 }
