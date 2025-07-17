@@ -1,4 +1,5 @@
 ﻿using Dyalog.Hmon.OtelAdapter;
+using Dyalog.Hmon.Client.Lib;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,7 +10,6 @@ using Serilog;
 
 using Spectre.Console;
 
-// Modern C# 13 top-level async entry point
 var config = new ConfigurationBuilder()
     .SetBasePath(AppContext.BaseDirectory)
     .AddJsonFile("config.json", optional: true)
@@ -27,7 +27,13 @@ AnsiConsole.MarkupLine("[bold green]HMON-to-OTEL Adapter starting...[/]");
 
 Log.Debug("Loaded configuration: {@Config}", config);
 
+//AnsiConsole.MarkupLine("[bold yellow]Dumping all configuration values...[/]");
+//foreach (var (key, value) in config.AsEnumerable().OrderBy(c => c.Key))
+//{
+//    AnsiConsole.MarkupLine($"[dim]{key}[/] = [yellow]{value}[/]");
+//}
 var adapterConfig = config.Get<AdapterConfig>();
+
 var validator = new AdapterConfigValidator();
 var validationResult = validator.Validate(null, adapterConfig ?? new AdapterConfig());
 if (adapterConfig == null || validationResult.Failed) {
