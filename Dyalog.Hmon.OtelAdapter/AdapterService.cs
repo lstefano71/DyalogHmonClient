@@ -25,6 +25,14 @@ public class AdapterService : BackgroundService, IAsyncDisposable
   private readonly ConcurrentDictionary<string, SessionMetrics> _sessionMetrics = new();
   private readonly Microsoft.Extensions.Logging.ILogger _otelLogger;
   private readonly Microsoft.Extensions.Logging.ILoggerFactory _otelLoggerFactory;
+
+  // OTEL counters for cumulative metrics
+  private Counter<long>? compactionsCounter;
+  private Counter<long>? gcCollectionsCounter;
+  private Counter<long>? cpuTimeCounter;
+  private Counter<long>? connectTimeCounter;
+  private Counter<long>? keyingTimeCounter;
+
   /// <summary>
   /// Holds per-session metric values and tags for OTEL export.
   /// </summary>
@@ -97,10 +105,14 @@ public class AdapterService : BackgroundService, IAsyncDisposable
       _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceMemoryAllocation, sm.Tags ?? [])), "Workspace Memory Allocation");
     _meter.CreateObservableGauge("dyalog.workspace.memory.allocation_hwm", () =>
       _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceMemoryAllocationHwm, sm.Tags ?? [])), "Workspace Memory Allocation HWM");
-    _meter.CreateObservableGauge("dyalog.workspace.compactions", () =>
-      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceCompactions, sm.Tags ?? [])), "Workspace Compactions");
-    _meter.CreateObservableGauge("dyalog.workspace.gc.collections", () =>
-      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceGcCollections, sm.Tags ?? [])), "Workspace GC Collections");
+
+    // Counters for cumulative metrics
+    compactionsCounter = _meter.CreateCounter<long>("dyalog.workspace.compactions", "Workspace Compactions");
+    gcCollectionsCounter = _meter.CreateCounter<long>("dyalog.workspace.gc.collections", "Workspace GC Collections");
+    cpuTimeCounter = _meter.CreateCounter<long>("dyalog.account.cpu_time", "CPU Time");
+    connectTimeCounter = _meter.CreateCounter<long>("dyalog.account.connect_time", "Connect Time");
+    keyingTimeCounter = _meter.CreateCounter<long>("dyalog.account.keying_time", "Keying Time");
+
     _meter.CreateObservableGauge("dyalog.workspace.pockets.garbage", () =>
       _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspacePocketsGarbage, sm.Tags ?? [])), "Workspace Pockets Garbage");
     _meter.CreateObservableGauge("dyalog.workspace.pockets.free", () =>
@@ -113,12 +125,6 @@ public class AdapterService : BackgroundService, IAsyncDisposable
       _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceTrapReserveWanted, sm.Tags ?? [])), "Workspace Trap Reserve Wanted");
     _meter.CreateObservableGauge("dyalog.workspace.trapreserveactual", () =>
       _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceTrapReserveActual, sm.Tags ?? [])), "Workspace Trap Reserve Actual");
-    _meter.CreateObservableGauge("dyalog.account.cpu_time", () =>
-      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.AccountCpuTime, sm.Tags ?? [])), "CPU Time");
-    _meter.CreateObservableGauge("dyalog.account.connect_time", () =>
-      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.AccountConnectTime, sm.Tags ?? [])), "Connect Time");
-    _meter.CreateObservableGauge("dyalog.account.keying_time", () =>
-      _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.AccountKeyingTime, sm.Tags ?? [])), "Keying Time");
     _meter.CreateObservableGauge("dyalog.threads.total", () =>
       _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.ThreadsTotal, sm.Tags ?? [])), "Total Thread Count");
     _meter.CreateObservableGauge("dyalog.threads.suspended", () =>
@@ -209,8 +215,11 @@ public class AdapterService : BackgroundService, IAsyncDisposable
   /// <param name="factsEvent">The facts event received from the HMON server.</param>
   private void HandleFactsReceivedEvent(FactsReceivedEvent factsEvent)
   {
-    Log.Debug("Processing FactsReceivedEvent with {FactCount} facts.", factsEvent.Facts.Facts.Count());
     var sessionId = factsEvent.SessionId != Guid.Empty ? factsEvent.SessionId.ToString() : "default";
+    Log.Debug("{session.id} Processing FactsReceivedEvent with {FactCount} facts.",
+  sessionId,
+  factsEvent.Facts.Facts.Count());
+
     var hostFact = factsEvent.Facts.Facts.OfType<HostFact>().FirstOrDefault();
     var accFactGlobal = factsEvent.Facts.Facts.OfType<AccountInformationFact>().FirstOrDefault();
     var sessionAttributes = new Dictionary<string, object?> {
@@ -242,15 +251,33 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     var globalTags = sessionAttributes.Select(kv => new KeyValuePair<string, object?>(kv.Key, kv.Value)).ToArray();
     var metrics = _sessionMetrics.GetOrAdd(sessionId, _ => new SessionMetrics { Tags = globalTags });
     metrics.Tags = globalTags;
+    long prevCompactions = metrics.WorkspaceCompactions;
+    long prevGcCollections = metrics.WorkspaceGcCollections;
+    long prevCpuTime = metrics.AccountCpuTime;
+    long prevConnectTime = metrics.AccountConnectTime;
+    long prevKeyingTime = metrics.AccountKeyingTime;
+
     foreach (var fact in factsEvent.Facts.Facts) {
-      Log.Debug("Mapping fact: {FactType}", fact.GetType().Name);
+      Log.Debug("{session.id} Mapping fact: {FactType}",
+        sessionId,
+        fact.Name);
       if (fact is WorkspaceFact wsFactLocal) {
         metrics.WorkspaceMemoryAvailable = wsFactLocal.Available;
         metrics.WorkspaceMemoryUsed = wsFactLocal.Used;
         metrics.WorkspaceMemoryAllocation = wsFactLocal.Allocation;
         metrics.WorkspaceMemoryAllocationHwm = wsFactLocal.AllocationHWM;
+
+        // Increment counters for cumulative metrics
+        long compactionsDelta = wsFactLocal.Compactions - prevCompactions;
+        if (compactionsDelta > 0 && compactionsCounter != null)
+          compactionsCounter.Add(compactionsDelta, metrics.Tags ?? []);
         metrics.WorkspaceCompactions = wsFactLocal.Compactions;
+
+        long gcCollectionsDelta = wsFactLocal.GarbageCollections - prevGcCollections;
+        if (gcCollectionsDelta > 0 && gcCollectionsCounter != null)
+          gcCollectionsCounter.Add(gcCollectionsDelta, metrics.Tags ?? []);
         metrics.WorkspaceGcCollections = wsFactLocal.GarbageCollections;
+
         metrics.WorkspacePocketsGarbage = wsFactLocal.GarbagePockets;
         metrics.WorkspacePocketsFree = wsFactLocal.FreePockets;
         metrics.WorkspacePocketsUsed = wsFactLocal.UsedPockets;
@@ -258,8 +285,19 @@ public class AdapterService : BackgroundService, IAsyncDisposable
         metrics.WorkspaceTrapReserveWanted = wsFactLocal.TrapReserveWanted;
         metrics.WorkspaceTrapReserveActual = wsFactLocal.TrapReserveActual;
       } else if (fact is AccountInformationFact accFactLocal) {
+        long cpuTimeDelta = accFactLocal.ComputeTime - prevCpuTime;
+        if (cpuTimeDelta > 0 && cpuTimeCounter != null)
+          cpuTimeCounter.Add(cpuTimeDelta, metrics.Tags ?? []);
         metrics.AccountCpuTime = accFactLocal.ComputeTime;
+
+        long connectTimeDelta = accFactLocal.ConnectTime - prevConnectTime;
+        if (connectTimeDelta > 0 && connectTimeCounter != null)
+          connectTimeCounter.Add(connectTimeDelta, metrics.Tags ?? []);
         metrics.AccountConnectTime = accFactLocal.ConnectTime;
+
+        long keyingTimeDelta = accFactLocal.KeyingTime - prevKeyingTime;
+        if (keyingTimeDelta > 0 && keyingTimeCounter != null)
+          keyingTimeCounter.Add(keyingTimeDelta, metrics.Tags ?? []);
         metrics.AccountKeyingTime = accFactLocal.KeyingTime;
       } else if (fact is ThreadCountFact threadCountFactLocal) {
         metrics.ThreadsTotal = threadCountFactLocal.Total;
@@ -284,7 +322,9 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     switch (notificationEvent.Notification.Event.Name) {
       case "UntrappedSignal":
       case "TrappedSignal":
-        var dmx = notificationEvent.Notification.DMX;
+        var n = notificationEvent.Notification;
+        var dmx = n.DMX;
+        logAttributes["notification.exception"] = n.Exception;
         logAttributes["dmx.restricted"] = dmx.Restricted;
         logAttributes["dmx.category"] = dmx.Category;
         logAttributes["dmx.dm"] = dmx.DM;
@@ -295,16 +335,17 @@ public class AdapterService : BackgroundService, IAsyncDisposable
         logAttributes["dmx.vendor"] = dmx.Vendor;
         logAttributes["dmx.message"] = dmx.Message;
         logAttributes["dmx.os_error"] = dmx.OSError;
-        logAttributes["dmx.os_error.source"] = dmx.OSError.Source;
-        logAttributes["dmx.os_error.code"] = dmx.OSError.Code;
-        logAttributes["dmx.os_error.description"] = dmx.OSError.Description;
+        logAttributes["dmx.os_error.source"] = dmx.OSError?.Source;
+        logAttributes["dmx.os_error.code"] = dmx.OSError?.Code;
+        logAttributes["dmx.os_error.description"] = dmx.OSError?.Description;
+
         _otelLogger.LogErrorWithContext(logAttributes,
             "Event received {event.name} {dmx.category} '{dmx.message}' {dyalog.signal.stack} {dyalog.signal.thread_info}",
-            notificationEvent.Notification.Event.Name,
+            n.Event?.Name,
             dmx?.Category,
             dmx?.Message,
-            notificationEvent.Notification.Stack,
-            notificationEvent.Notification.Tid);
+            n.Stack,
+            n.Tid);
         break;
       case "WorkspaceResize":
         _otelLogger.LogInformationWithContext(logAttributes,
