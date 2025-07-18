@@ -42,14 +42,14 @@ internal class ServerConnection : IAsyncDisposable
     _registerConnection = registerConnection;
     _connectionTask = ConnectWithRetriesAsync(_cts.Token);
   }
-/// <summary>
-/// Attempts to connect to the remote HMON server with retry and exponential backoff.
-/// </summary>
-/// <param name="ct">Cancellation token.</param>
-private async Task ConnectWithRetriesAsync(CancellationToken ct)
-{
-  var retryPolicy = _options.ConnectionRetryPolicy;
-  var logger = Log.Logger.ForContext<ServerConnection>();
+  /// <summary>
+  /// Attempts to connect to the remote HMON server with retry and exponential backoff.
+  /// </summary>
+  /// <param name="ct">Cancellation token.</param>
+  private async Task ConnectWithRetriesAsync(CancellationToken ct)
+  {
+    var retryPolicy = _options.ConnectionRetryPolicy;
+    var logger = Log.Logger.ForContext<ServerConnection>();
 
     // Polly retry policy with exponential backoff and jitter
     AsyncRetryPolicy retryPolicyWithJitter = Policy
