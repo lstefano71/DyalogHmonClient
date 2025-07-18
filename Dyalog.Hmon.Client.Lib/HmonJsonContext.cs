@@ -14,6 +14,9 @@ namespace Dyalog.Hmon.Client.Lib;
 [JsonSerializable(typeof(InvalidSyntaxResponse))]
 [JsonSerializable(typeof(DisallowedUidResponse))]
 
+/// <summary>
+/// Source-generated serialization context for HMON protocol types.
+/// </summary>
 internal partial class HmonJsonContext : JsonSerializerContext
 {
   // Removed manual override of GeneratedSerializerOptions to avoid conflict with source generator.

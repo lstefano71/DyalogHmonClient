@@ -102,96 +102,112 @@ internal class HmonConnection : IAsyncDisposable
       return default!;
     }
   }
-  private async Task StartProcessingAsync(string host, int port, string? friendlyName, CancellationToken ct)
-  {
-    string reason = "Unknown";
-    try {
-      var pipeReader = PipeReader.Create(_tcpClient.GetStream());
-      // Perform handshake using DrptFramer
-      bool handshakeOk = await _hmonFramer.PerformHandshakeAsync(ct);
-      if (!handshakeOk) {
-        throw new HmonHandshakeFailedException($"Handshake failed for session: {_sessionId}.", null);
-      }
-      _pipeReadyTcs.TrySetResult(true);
-      _logger.Debug("Handshake completed for session {SessionId}", _sessionId);
-      // Main message loop
-      while (!ct.IsCancellationRequested) {
-        var message = await _hmonFramer.ReadNextMessageAsync(ParseAndDispatchMessageAsync, ct);
-      }
-      reason = "Cancellation requested";
-    } catch (OperationCanceledException) {
-      reason = "Operation canceled";
-      _logger.Debug("StartProcessingAsync canceled for session {SessionId}", _sessionId);
-    } catch (Exception ex) {
-      reason = ex.Message;
-      _logger.Error(ex, "Exception in StartProcessingAsync for session {SessionId}", _sessionId);
-    } finally {
-      if (_onDisconnect != null) {
-        await _onDisconnect.Invoke(reason);
-      } else {
-        await _eventWriter.WriteAsync(new SessionDisconnectedEvent(_sessionId, host, port, friendlyName, reason), ct);
-      }
+/// <summary>
+/// Main processing loop for HMON connection: handshake, message reading, and event dispatch.
+/// </summary>
+/// <param name="host">Remote host address.</param>
+/// <param name="port">Remote port.</param>
+/// <param name="friendlyName">Optional friendly name.</param>
+/// <param name="ct">Cancellation token.</param>
+private async Task StartProcessingAsync(string host, int port, string? friendlyName, CancellationToken ct)
+{
+  string reason = "Unknown";
+  try {
+    var pipeReader = PipeReader.Create(_tcpClient.GetStream());
+    // Perform handshake using DrptFramer
+    bool handshakeOk = await _hmonFramer.PerformHandshakeAsync(ct);
+    if (!handshakeOk) {
+      throw new HmonHandshakeFailedException($"Handshake failed for session: {_sessionId}.", null);
+    }
+    _pipeReadyTcs.TrySetResult(true);
+    _logger.Debug("Handshake completed for session {SessionId}", _sessionId);
+    // Main message loop
+    while (!ct.IsCancellationRequested) {
+      var message = await _hmonFramer.ReadNextMessageAsync(ParseAndDispatchMessageAsync, ct);
+    }
+    reason = "Cancellation requested";
+  } catch (OperationCanceledException) {
+    reason = "Operation canceled";
+    _logger.Debug("StartProcessingAsync canceled for session {SessionId}", _sessionId);
+  } catch (Exception ex) {
+    reason = ex.Message;
+    _logger.Error(ex, "Exception in StartProcessingAsync for session {SessionId}", _sessionId);
+  } finally {
+    if (_onDisconnect != null) {
+      await _onDisconnect.Invoke(reason);
+    } else {
+      await _eventWriter.WriteAsync(new SessionDisconnectedEvent(_sessionId, host, port, friendlyName, reason), ct);
     }
   }
+}
   // Add a static field to cache JsonSerializerOptions
   private static readonly JsonSerializerOptions CachedJsonSerializerOptions = new() {
     Converters = { new FactJsonConverter() }
   };
   // Update the code to use the cached JsonSerializerOptions instance
-  private async Task ParseAndDispatchMessageAsync(ReadOnlySequence<byte> message)
-  {
-    var reader = new Utf8JsonReader(message);
-    if (!reader.Read() || reader.TokenType != JsonTokenType.StartArray)
-      return;
-    if (!reader.Read() || reader.TokenType != JsonTokenType.String)
-      return;
-    var command = reader.GetString();
-    if (!reader.Read())
-      return;
-    HmonEvent? hmonEvent =
-        command switch {
-          "Facts" => new FactsReceivedEvent(
-                _sessionId,
-                JsonSerializer.Deserialize<FactsResponse>(
-                    ref reader,
-                    CachedJsonSerializerOptions // Use cached options here
-                )!
-            ),
-          "Notification" => new NotificationReceivedEvent(_sessionId, JsonSerializer.Deserialize<NotificationResponse>(ref reader, HmonJsonContext.Default.NotificationResponse)!),
-          "LastKnownState" => new LastKnownStateReceivedEvent(_sessionId, JsonSerializer.Deserialize<LastKnownStateResponse>(ref reader, HmonJsonContext.Default.LastKnownStateResponse)!),
-          "Subscribed" => new SubscribedResponseReceivedEvent(_sessionId, JsonSerializer.Deserialize<SubscribedResponse>(ref reader, HmonJsonContext.Default.SubscribedResponse)!),
-          "RideConnection" => new RideConnectionReceivedEvent(_sessionId, JsonSerializer.Deserialize<RideConnectionResponse>(ref reader, HmonJsonContext.Default.RideConnectionResponse)!),
-          "UserMessage" => new UserMessageReceivedEvent(_sessionId, JsonSerializer.Deserialize<UserMessageResponse>(ref reader, HmonJsonContext.Default.UserMessageResponse)!),
-          "UnknownCommand" => new UnknownCommandEvent(_sessionId, JsonSerializer.Deserialize<UnknownCommandResponse>(ref reader, HmonJsonContext.Default.UnknownCommandResponse)!),
-          "MalformedCommand" => new MalformedCommandEvent(_sessionId, JsonSerializer.Deserialize<MalformedCommandResponse>(ref reader, HmonJsonContext.Default.MalformedCommandResponse)!),
-          "InvalidSyntax" => new InvalidSyntaxEvent(_sessionId, JsonSerializer.Deserialize<InvalidSyntaxResponse>(ref reader, HmonJsonContext.Default.InvalidSyntaxResponse)!),
-          "DisallowedUID" => new DisallowedUidEvent(_sessionId, JsonSerializer.Deserialize<DisallowedUidResponse>(ref reader, HmonJsonContext.Default.DisallowedUidResponse)!),
-          _ => null
-        };
-    if (hmonEvent != null) {
-      var uid = GetUid(hmonEvent);
-      if (uid != null && _pendingRequests.TryRemove(uid, out var tcs)) {
-        tcs.TrySetResult(hmonEvent);
-      } else {
-        await _eventWriter.WriteAsync(hmonEvent);
-      }
+/// <summary>
+/// Parses a protocol message and dispatches the corresponding HMON event.
+/// </summary>
+/// <param name="message">Protocol message buffer.</param>
+private async Task ParseAndDispatchMessageAsync(ReadOnlySequence<byte> message)
+{
+  var reader = new Utf8JsonReader(message);
+  if (!reader.Read() || reader.TokenType != JsonTokenType.StartArray)
+    return;
+  if (!reader.Read() || reader.TokenType != JsonTokenType.String)
+    return;
+  var command = reader.GetString();
+  if (!reader.Read())
+    return;
+  HmonEvent? hmonEvent =
+      command switch {
+        "Facts" => new FactsReceivedEvent(
+              _sessionId,
+              JsonSerializer.Deserialize<FactsResponse>(
+                  ref reader,
+                  CachedJsonSerializerOptions // Use cached options here
+              )!
+          ),
+        "Notification" => new NotificationReceivedEvent(_sessionId, JsonSerializer.Deserialize<NotificationResponse>(ref reader, HmonJsonContext.Default.NotificationResponse)!),
+        "LastKnownState" => new LastKnownStateReceivedEvent(_sessionId, JsonSerializer.Deserialize<LastKnownStateResponse>(ref reader, HmonJsonContext.Default.LastKnownStateResponse)!),
+        "Subscribed" => new SubscribedResponseReceivedEvent(_sessionId, JsonSerializer.Deserialize<SubscribedResponse>(ref reader, HmonJsonContext.Default.SubscribedResponse)!),
+        "RideConnection" => new RideConnectionReceivedEvent(_sessionId, JsonSerializer.Deserialize<RideConnectionResponse>(ref reader, HmonJsonContext.Default.RideConnectionResponse)!),
+        "UserMessage" => new UserMessageReceivedEvent(_sessionId, JsonSerializer.Deserialize<UserMessageResponse>(ref reader, HmonJsonContext.Default.UserMessageResponse)!),
+        "UnknownCommand" => new UnknownCommandEvent(_sessionId, JsonSerializer.Deserialize<UnknownCommandResponse>(ref reader, HmonJsonContext.Default.UnknownCommandResponse)!),
+        "MalformedCommand" => new MalformedCommandEvent(_sessionId, JsonSerializer.Deserialize<MalformedCommandResponse>(ref reader, HmonJsonContext.Default.MalformedCommandResponse)!),
+        "InvalidSyntax" => new InvalidSyntaxEvent(_sessionId, JsonSerializer.Deserialize<InvalidSyntaxResponse>(ref reader, HmonJsonContext.Default.InvalidSyntaxResponse)!),
+        "DisallowedUID" => new DisallowedUidEvent(_sessionId, JsonSerializer.Deserialize<DisallowedUidResponse>(ref reader, HmonJsonContext.Default.DisallowedUidResponse)!),
+        _ => null
+      };
+  if (hmonEvent != null) {
+    var uid = GetUid(hmonEvent);
+    if (uid != null && _pendingRequests.TryRemove(uid, out var tcs)) {
+      tcs.TrySetResult(hmonEvent);
+    } else {
+      await _eventWriter.WriteAsync(hmonEvent);
     }
   }
-  private static string? GetUid(HmonEvent hmonEvent)
-  {
-    return hmonEvent switch {
-      FactsReceivedEvent e => e.Facts.UID,
-      NotificationReceivedEvent e => e.Notification.UID,
-      LastKnownStateReceivedEvent e => e.State.UID,
-      SubscribedResponseReceivedEvent e => e.Response.UID,
-      RideConnectionReceivedEvent e => e.Response.UID,
-      UserMessageReceivedEvent e => e.Message.UID,
-      UnknownCommandEvent e => e.Error.UID,
-      MalformedCommandEvent e => e.Error.UID,
-      DisallowedUidEvent e => e.Error.UID,
-      _ => null
-    };
-  }
+}
+/// <summary>
+/// Extracts the UID from a HMON event, if present.
+/// </summary>
+/// <param name="hmonEvent">HMON event instance.</param>
+/// <returns>UID string or null.</returns>
+private static string? GetUid(HmonEvent hmonEvent)
+{
+  return hmonEvent switch {
+    FactsReceivedEvent e => e.Facts.UID,
+    NotificationReceivedEvent e => e.Notification.UID,
+    LastKnownStateReceivedEvent e => e.State.UID,
+    SubscribedResponseReceivedEvent e => e.Response.UID,
+    RideConnectionReceivedEvent e => e.Response.UID,
+    UserMessageReceivedEvent e => e.Message.UID,
+    UnknownCommandEvent e => e.Error.UID,
+    MalformedCommandEvent e => e.Error.UID,
+    DisallowedUidEvent e => e.Error.UID,
+    _ => null
+  };
+}
   /// <summary>
   /// Disposes the connection and releases resources.
   /// </summary>

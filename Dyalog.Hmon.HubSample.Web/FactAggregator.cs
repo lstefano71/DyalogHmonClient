@@ -18,6 +18,9 @@ public record EventRecord(
     DateTimeOffset Timestamp
 );
 
+/// <summary>
+/// Aggregates facts and event history for HMON sessions in the hub sample web application.
+/// </summary>
 public class FactAggregator
 {
   private readonly ConcurrentDictionary<(string ServerName, Guid SessionId, string FactName), FactRecord> _facts = new();

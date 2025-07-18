@@ -3,6 +3,9 @@ using System.Text.Json;
 using System.Threading.Channels;
 namespace Dyalog.Hmon.HubSample.Web;
 
+/// <summary>
+/// WebSocket server for broadcasting fact and event updates to clients in the hub sample web application.
+/// </summary>
 public class WebSocketHub(FactAggregator aggregator)
 {
   private readonly FactAggregator _aggregator = aggregator;
