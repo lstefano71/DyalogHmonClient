@@ -2,6 +2,7 @@ using System.Net.WebSockets;
 using System.Text.Json;
 using System.Threading.Channels;
 namespace Dyalog.Hmon.HubSample.Web;
+
 public class WebSocketHub(FactAggregator aggregator)
 {
   private readonly FactAggregator _aggregator = aggregator;
