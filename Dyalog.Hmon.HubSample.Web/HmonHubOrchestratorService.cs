@@ -90,25 +90,46 @@ public class HmonHubOrchestratorService(HubSampleConfig config, FactAggregator a
             }
             break;
 
-          case NotificationReceivedEvent notificationEvent:
-            var eventName = notificationEvent.Notification.Event.Name;
-            var payload = notificationEvent.Notification;
-            var timestamp = DateTimeOffset.UtcNow;
-            _aggregator.AddEvent(
-                serverName: serverName,
-                sessionId: notificationEvent.SessionId,
-                eventName: eventName,
-                payload: payload,
-                timestamp: timestamp
-            );
-            // Immediately send event through websocket
-            _wsHub?.BroadcastEvent(
-                serverName: serverName,
-                sessionId: notificationEvent.SessionId,
-                eventName: eventName,
-                payload: payload,
-                timestamp: timestamp
-            );
+          case NotificationReceivedEvent notificationEvent: {
+              var eventName = notificationEvent.Notification.Event.Name;
+              var payload = notificationEvent.Notification;
+              var timestamp = DateTimeOffset.UtcNow;
+              _aggregator.AddEvent(
+                  serverName: serverName,
+                  sessionId: notificationEvent.SessionId,
+                  eventName: eventName,
+                  payload: payload,
+                  timestamp: timestamp
+              );
+              // Immediately send event through websocket
+              _wsHub?.BroadcastEvent(
+                  serverName: serverName,
+                  sessionId: notificationEvent.SessionId,
+                  eventName: eventName,
+                  payload: payload,
+                  timestamp: timestamp
+              );
+            }
+            break;
+          case UserMessageReceivedEvent userMessageReceivedEvent: {
+              var eventName = "UserMessage";
+              var payload = userMessageReceivedEvent.Message;
+              var timestamp = DateTimeOffset.UtcNow;
+              _aggregator.AddEvent(
+                  serverName: serverName,
+                  sessionId: userMessageReceivedEvent.SessionId,
+                  eventName: eventName,
+                  payload: payload,
+                  timestamp: timestamp
+              );
+              _wsHub?.BroadcastEvent(
+                  serverName: serverName,
+                  sessionId: userMessageReceivedEvent.SessionId,
+                  eventName: eventName,
+                  payload: payload,
+                  timestamp: timestamp
+              );
+            }
             break;
         }
       }
