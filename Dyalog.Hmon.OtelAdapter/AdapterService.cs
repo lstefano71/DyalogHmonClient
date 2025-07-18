@@ -313,7 +313,7 @@ public class AdapterService : BackgroundService, IAsyncDisposable
   /// <param name="stoppingToken">Cancellation token for graceful shutdown.</param>
   private async Task HandleNotificationReceivedEventAsync(NotificationReceivedEvent notificationEvent, CancellationToken stoppingToken)
   {
-   var sessionId = notificationEvent.SessionId;
+    var sessionId = notificationEvent.SessionId;
     var logAttributes = new Dictionary<string, object> {
       ["service.name"] = _adapterConfig.ServiceName,
       ["session.id"] = sessionId,

@@ -42,28 +42,11 @@ This returns a session ID you can use for subscriptions and polling.
 
 ## 4. Subscribing to Events and Polling Facts
 
-### Classic API
-
-Subscribe to events and start polling facts:
+Subscribe to interpreter events and start polling facts:
 
 ```csharp
 await orchestrator.SubscribeAsync(sessionId, new[] { SubscriptionEvent.UntrappedSignal }, cancellationToken);
 await orchestrator.PollFactsAsync(sessionId, new[] { FactType.Workspace, FactType.ThreadCount }, TimeSpan.FromSeconds(5), cancellationToken);
-```
-
-### Fluent API (Builder Pattern)
-
-Use the `SessionMonitorBuilder` for fluent setup:
-
-```csharp
-var builder = new SessionMonitorBuilder(orchestrator, sessionId)
-    .SubscribeTo(SubscriptionEvent.UntrappedSignal)
-    .PollFacts(TimeSpan.FromSeconds(5), FactType.Workspace, FactType.ThreadCount)
-    .OnFactChanged(async fact => { /* handle fact */ })
-    .OnEvent(async evt => { /* handle event */ })
-    .WithCancellation(cancellationToken);
-
-await builder.StartAsync();
 ```
 
 ## 5. Accessing Facts
@@ -84,15 +67,27 @@ if (fact != null)
 }
 ```
 
-## 6. Handling Session Updates
+## 6. Handling Events
 
-Subscribe to unified session updates:
+Process all lifecycle and fact updates from the unified event stream:
 
 ```csharp
-orchestrator.OnSessionUpdated += (sessionId, fact) =>
+await foreach (var evt in orchestrator.Events.WithCancellation(cancellationToken))
 {
-    Console.WriteLine($"Session {sessionId} updated fact {fact.GetType().Name}");
-};
+    switch (evt)
+    {
+        case SessionConnectedEvent connected:
+            Console.WriteLine($"Session connected: {connected.SessionId}");
+            break;
+        case SessionDisconnectedEvent disconnected:
+            Console.WriteLine($"Session disconnected: {disconnected.SessionId}, Reason: {disconnected.Reason}");
+            break;
+        case FactsReceivedEvent factsEvt:
+            Console.WriteLine($"Facts updated for session {factsEvt.SessionId}");
+            break;
+        // Handle other event types as needed
+    }
+}
 ```
 
 ## 7. Error and Diagnostics Handling
@@ -143,15 +138,6 @@ Central orchestrator for managing HMON connections and exposing a unified event 
 
 - `IAsyncEnumerable<HmonEvent> Events`  
   Unified asynchronous event stream for all HMON events.
-
-- `event Action<Guid, Fact>? OnSessionUpdated`  
-  Fired when any fact for a session is updated.
-
-- `event Func<ClientConnectedEventArgs, Task>? ClientConnected`  
-  Fired when a client connects.
-
-- `event Func<ClientDisconnectedEventArgs, Task>? ClientDisconnected`  
-  Fired when a client disconnects.
 
 - `event Action<Exception, Guid?>? OnError`  
   Fired on error or diagnostic event.
@@ -271,8 +257,8 @@ public record FactsResponse(string? UID, int? Interval, IEnumerable<Fact> Facts)
 ### Lifecycle Events
 
 ```csharp
-public record ClientConnectedEventArgs(Guid SessionId, string Host, int Port, string? FriendlyName)
-public record ClientDisconnectedEventArgs(Guid SessionId, string Host, int Port, string? FriendlyName, string Reason)
+public record SessionConnectedEvent(Guid SessionId, string Host, int Port, string? FriendlyName) : HmonEvent(SessionId);
+public record SessionDisconnectedEvent(Guid SessionId, string Reason) : HmonEvent(SessionId);
 ```
 
 ### Event Stream
@@ -373,4 +359,3 @@ public record RetryPolicy
 public class HMonBooleanConverter : JsonConverter<bool>
 public class FactJsonConverter : JsonConverter<Fact>
 public class InternalLocationInfoConverter : JsonConverter<InternalLocationInfo?>
-```
