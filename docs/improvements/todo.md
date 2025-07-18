@@ -21,5 +21,5 @@ This list is prioritized to tackle the most critical correctness issues first, f
 
 ## Phase 4: Code Quality and Developer Experience
 
-- [ ] **Feature Brief #4:** Add configurable, per-command timeouts to the orchestrator.
+- [x] **Feature Brief #4:** Add configurable, per-command timeouts to the orchestrator.
 - [ ] **Feature Brief #5:** Refactor OTEL logging to use Serilog enrichers instead of custom extension methods.

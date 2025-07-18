@@ -15,6 +15,7 @@ _Last reviewed: 2025-07-17 17:50 CEST_
 - Update documentation as needed.
 
 ## Previous Focus
+- Feature Brief #4: Configurable, per-command timeouts for orchestrator implemented and documented.
 - Feature Brief #2: Typed, specific exceptions for error handling implemented in Dyalog.Hmon.Client.Lib.
   - Added HmonException, SessionNotFoundException, HmonConnectionException, HmonHandshakeFailedException, CommandTimeoutException.
   - Refactored HmonOrchestrator, ServerConnection, HmonConnection to use new exceptions.
@@ -28,6 +29,7 @@ _Last reviewed: 2025-07-17 17:50 CEST_
 - Unit and integration tests for core logic and orchestrator API.
 
 ## Recent Changes
+- Feature Brief #4: Configurable, per-command timeouts implemented in HmonOrchestrator and archived; documentation and todo list updated.
 - Feature Brief #2: Typed, specific exceptions for error handling implemented and documented.
 - docs/improvements/todo.md updated to mark Feature Brief #2 as complete.
 - Memory bank and TODOs reviewed and updated.
