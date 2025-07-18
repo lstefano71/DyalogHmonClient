@@ -4,6 +4,7 @@ _Last reviewed: 2025-07-17 17:51 CEST_
 
 ## What works
 - Project focus is on hmon-to-otel-adapter.
+- Feature Brief #4: Configurable, per-command timeouts implemented in Dyalog.Hmon.Client.Lib.
 - Memory bank and TODOs reviewed and confirmed up to date.
 - Architectural, product, and technical context established.
 - .NET console project scaffolded.
@@ -16,6 +17,7 @@ _Last reviewed: 2025-07-17 17:51 CEST_
 
 ## Completed Tasks
 
+- Feature Brief #4: Configurable, per-command timeouts for orchestrator (2025-07-17).
 - Feature Brief #2: Typed, specific exceptions for error handling (2025-07-17).
 - Feature Brief #1: Polly-based retry logic for resilient connection management implemented in ServerConnection.cs (2025-07-17).
 - Initial structure: Generic Host and AdapterService class.
@@ -53,6 +55,7 @@ _Last reviewed: 2025-07-17 17:51 CEST_
 - Project is now fully documented, including usage examples in [docs/hmon_to_otel_adapter.md](../docs/hmon_to_otel_adapter.md).
 
 ## Current status
+- Feature Brief #4 (configurable, per-command timeouts) completed and documented.
 - Feature Brief #2 (typed, specific exceptions for error handling) completed and documented.
 - Feature Brief #1 (Polly integration for connection retries) completed and documented.
 - Memory bank and TODOs reviewed and confirmed up to date.
@@ -63,6 +66,7 @@ _Last reviewed: 2025-07-17 17:51 CEST_
 - No adapter code implemented yet.
 
 ## Evolution of project decisions
+- Feature Brief #4: Adopted configurable, per-command timeouts for orchestrator as of 2025-07-17.
 - Feature Brief #2: Adopted typed, specific exceptions for error handling in Dyalog.Hmon.Client.Lib as of 2025-07-17.
 - Feature Brief #1: Adopted Polly for resilient connection retries in ServerConnection.cs as of 2025-07-17.
 - Project scope and context updated to focus on HMON-to-OTEL Adapter as of 2025-07-16.
