@@ -2,7 +2,9 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 namespace Dyalog.Hmon.Client.Lib;
-// Marker interface for payloads that support UID correlation
+/// <summary>
+/// Marker interface for payloads that support UID correlation in HMON protocol commands.
+/// </summary>
 public interface IUidPayload
 {
   string? UID { get; set; }
@@ -60,12 +62,18 @@ public abstract record Fact(int ID, string Name)
 {
   public FactType FactType => (FactType)ID;
 }
+/// <summary>
+/// JSON converter for polymorphic Fact deserialization in HMON protocol.
+/// </summary>
 public class FactJsonConverter : JsonConverter<Fact>
 {
-  public override Fact? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-  {
-    using var doc = JsonDocument.ParseValue(ref reader);
-    var root = doc.RootElement;
+/// <summary>
+/// Reads a Fact object from its polymorphic JSON representation.
+/// </summary>
+public override Fact? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+{
+  using var doc = JsonDocument.ParseValue(ref reader);
+  var root = doc.RootElement;
     if (!root.TryGetProperty("Name", out var nameProp))
       throw new JsonException("Missing 'Name' property for Fact polymorphic deserialization.");
     var name = nameProp.GetString();
@@ -107,10 +115,13 @@ public class FactJsonConverter : JsonConverter<Fact>
       _ => throw new JsonException($"Unknown Fact type: {name}")
     };
   }
-  public override void Write(Utf8JsonWriter writer, Fact value, JsonSerializerOptions options)
-  {
-    JsonSerializer.Serialize(writer, (object)value, value.GetType(), options);
-  }
+/// <summary>
+/// Writes a Fact object to its JSON representation.
+/// </summary>
+public override void Write(Utf8JsonWriter writer, Fact value, JsonSerializerOptions options)
+{
+  JsonSerializer.Serialize(writer, (object)value, value.GetType(), options);
+}
 }
 public record HostFact(MachineInfo Machine, InterpreterInfo Interpreter, CommsLayerInfo? CommsLayer, RideInfo RIDE) : Fact(1, "Host");
 public record MachineInfo(string Name, string User, int PID, object Desc, int AccessLevel);
@@ -185,20 +196,29 @@ public record LastKnownStateResponse(
 public record ActivityInfo(int Code, [property: JsonConverter(typeof(HmonTimestampConverter))] DateTime TS);
 public record LocationInfo(string Function, int Line, [property: JsonConverter(typeof(HmonTimestampConverter))] DateTime TS);
 public record WsFullInfo([property: JsonConverter(typeof(HmonTimestampConverter))] DateTime TS);
+/// <summary>
+/// Converts HMON protocol timestamps to and from DateTime.
+/// </summary>
 public class HmonTimestampConverter : JsonConverter<DateTime>
 {
   private const string Format = "yyyyMMdd'T'HHmmss.fff'Z'";
-  public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-  {
-    var str = reader.GetString();
-    return str is null
-      ? throw new JsonException("Timestamp string is null")
-      : DateTime.ParseExact(str, Format, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
-  }
-  public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
-  {
-    writer.WriteStringValue(value.ToUniversalTime().ToString(Format, CultureInfo.InvariantCulture));
-  }
+/// <summary>
+/// Reads a DateTime from HMON protocol timestamp string.
+/// </summary>
+public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+{
+  var str = reader.GetString();
+  return str is null
+    ? throw new JsonException("Timestamp string is null")
+    : DateTime.ParseExact(str, Format, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
+}
+/// <summary>
+/// Writes a DateTime as HMON protocol timestamp string.
+/// </summary>
+public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
+{
+  writer.WriteStringValue(value.ToUniversalTime().ToString(Format, CultureInfo.InvariantCulture));
+}
 }
 public record SubscribedResponse(string? UID, IEnumerable<SubscriptionStatus> Events);
 public record SubscriptionStatus(int ID, string Name, int Value)
@@ -212,60 +232,78 @@ public record MalformedCommandResponse(string? UID, string Name);
 public record InvalidSyntaxResponse();
 public record DisallowedUidResponse(string? UID, string Name);
 public record InternalLocationInfo(string File, int Line);
+/// <summary>
+/// JSON converter for InternalLocationInfo tuple serialization in HMON protocol.
+/// </summary>
 public class InternalLocationInfoConverter : JsonConverter<InternalLocationInfo?>
 {
-  public override InternalLocationInfo? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-  {
-    if (reader.TokenType != JsonTokenType.StartArray)
-      return null;
-    reader.Read();
-    var file = reader.GetString();
-    reader.Read();
-    var line = reader.GetInt32();
-    reader.Read(); // EndArray
-    return new InternalLocationInfo(file!, line);
+/// <summary>
+/// Reads an InternalLocationInfo from HMON protocol tuple representation.
+/// </summary>
+public override InternalLocationInfo? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+{
+  if (reader.TokenType != JsonTokenType.StartArray)
+    return null;
+  reader.Read();
+  var file = reader.GetString();
+  reader.Read();
+  var line = reader.GetInt32();
+  reader.Read(); // EndArray
+  return new InternalLocationInfo(file!, line);
+}
+/// <summary>
+/// Writes an InternalLocationInfo as HMON protocol tuple representation.
+/// </summary>
+public override void Write(Utf8JsonWriter writer, InternalLocationInfo? value, JsonSerializerOptions options)
+{
+  if (value == null) {
+    writer.WriteNullValue();
+    return;
   }
-  public override void Write(Utf8JsonWriter writer, InternalLocationInfo? value, JsonSerializerOptions options)
-  {
-    if (value == null) {
-      writer.WriteNullValue();
-      return;
-    }
-    writer.WriteStartArray();
-    writer.WriteStringValue(value.File);
-    writer.WriteNumberValue(value.Line);
-    writer.WriteEndArray();
-  }
+  writer.WriteStartArray();
+  writer.WriteStringValue(value.File);
+  writer.WriteNumberValue(value.Line);
+  writer.WriteEndArray();
+}
 }
 // OSErrorInfo: represents a 3-element tuple (int, int, string) from protocol
 public record OSErrorInfo(int Source, int Code, string Description);
+/// <summary>
+/// JSON converter for OSErrorInfo tuple serialization in HMON protocol.
+/// </summary>
 public class OSErrorInfoJsonConverter : JsonConverter<OSErrorInfo?>
 {
-  public override OSErrorInfo? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-  {
-    if (reader.TokenType == JsonTokenType.Null)
-      return null;
-    if (reader.TokenType != JsonTokenType.StartArray)
-      throw new JsonException("OSError must be a 3-element array");
-    reader.Read();
-    int source = reader.GetInt32();
-    reader.Read();
-    int code = reader.GetInt32();
-    reader.Read();
-    string? desc = reader.GetString();
-    reader.Read(); // EndArray
-    return new OSErrorInfo(source, code, desc ?? "");
+/// <summary>
+/// Reads an OSErrorInfo from HMON protocol tuple representation.
+/// </summary>
+public override OSErrorInfo? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+{
+  if (reader.TokenType == JsonTokenType.Null)
+    return null;
+  if (reader.TokenType != JsonTokenType.StartArray)
+    throw new JsonException("OSError must be a 3-element array");
+  reader.Read();
+  int source = reader.GetInt32();
+  reader.Read();
+  int code = reader.GetInt32();
+  reader.Read();
+  string? desc = reader.GetString();
+  reader.Read(); // EndArray
+  return new OSErrorInfo(source, code, desc ?? "");
+}
+/// <summary>
+/// Writes an OSErrorInfo as HMON protocol tuple representation.
+/// </summary>
+public override void Write(Utf8JsonWriter writer, OSErrorInfo? value, JsonSerializerOptions options)
+{
+  if (value == null) {
+    writer.WriteNullValue();
+    return;
   }
-  public override void Write(Utf8JsonWriter writer, OSErrorInfo? value, JsonSerializerOptions options)
-  {
-    if (value == null) {
-      writer.WriteNullValue();
-      return;
-    }
-    writer.WriteStartArray();
-    writer.WriteNumberValue(value.Source);
-    writer.WriteNumberValue(value.Code);
-    writer.WriteStringValue(value.Description);
-    writer.WriteEndArray();
-  }
+  writer.WriteStartArray();
+  writer.WriteNumberValue(value.Source);
+  writer.WriteNumberValue(value.Code);
+  writer.WriteStringValue(value.Description);
+  writer.WriteEndArray();
+}
 }

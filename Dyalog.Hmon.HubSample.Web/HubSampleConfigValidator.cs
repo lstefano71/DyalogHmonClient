@@ -4,6 +4,9 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Dyalog.Hmon.HubSample.Web;
 
+/// <summary>
+/// Validates configuration options for the hub sample web application.
+/// </summary>
 public class HubSampleConfigValidator : IValidateOptions<HubSampleConfig>
 {
   public ValidateOptionsResult Validate(string? name, HubSampleConfig config)

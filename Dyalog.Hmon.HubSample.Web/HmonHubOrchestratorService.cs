@@ -3,6 +3,9 @@ using Dyalog.Hmon.Client.Lib;
 using Serilog;
 namespace Dyalog.Hmon.HubSample.Web;
 
+/// <summary>
+/// Orchestrates HMON sessions and processes events for the hub sample web application.
+/// </summary>
 public class HmonHubOrchestratorService(HubSampleConfig config, FactAggregator aggregator, WebSocketHub? wsHub = null) : IAsyncDisposable
 {
   private readonly HmonOrchestrator _orchestrator = new(new HmonOrchestratorOptions {

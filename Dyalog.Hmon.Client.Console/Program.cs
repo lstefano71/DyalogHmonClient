@@ -5,6 +5,9 @@ using Spectre.Console.Rendering;
 
 using System.Collections.Concurrent;
 using System.Globalization;
+/// <summary>
+/// Container for all session fact objects received from HMON.
+/// </summary>
 class SessionFacts
 {
   public WorkspaceFact? Workspace { get; set; }
@@ -14,6 +17,9 @@ class SessionFacts
   public ThreadsFact? Threads { get; set; }
   public SuspendedThreadsFact? SuspendedThreads { get; set; }
 }
+/// <summary>
+/// Main entry point and monitoring logic for the Dyalog.Hmon.Client console client.
+/// </summary>
 class Program
 {
   static int _carouselStep = 0;
