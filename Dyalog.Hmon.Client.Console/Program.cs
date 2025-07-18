@@ -25,7 +25,7 @@ class Program
     var facts = new ConcurrentDictionary<Guid, SessionFacts>();
     var recentEvents = new ConcurrentDictionary<Guid, List<string>>();
 
-    var listenerTask = orchestrator.StartListenerAsync("0.0.0.0", 4501, cancellationToken);
+    var listenerTask = orchestrator.StartListenerAsync("0.0.0.0", 4503, cancellationToken);
 
     var processingTask = Task.Run(async () => {
       await foreach (var hmonEvent in orchestrator.Events.WithCancellation(cancellationToken)) {
@@ -36,11 +36,11 @@ class Program
             recentEvents.TryAdd(connected.SessionId, []);
             AnsiConsole.MarkupLine($"[bold green]Session connected:[/] {connected.SessionId} from {connected.Host}:{connected.Port}");
             try {
-              await orchestrator.SubscribeAsync(connected.SessionId, [SubscriptionEvent.UntrappedSignal], cancellationToken);
+              await orchestrator.SubscribeAsync(connected.SessionId, [SubscriptionEvent.UntrappedSignal], ct: cancellationToken);
               await orchestrator.PollFactsAsync(connected.SessionId,
                   [FactType.Workspace, FactType.ThreadCount, FactType.Host, FactType.AccountInformation, FactType.Threads, FactType.SuspendedThreads],
                   TimeSpan.FromSeconds(5),
-                  cancellationToken);
+                  ct: cancellationToken);
             } catch (Exception ex) {
               AnsiConsole.MarkupLine($"[bold red]Error configuring session {connected.SessionId}:[/] {ex.Message}");
             }

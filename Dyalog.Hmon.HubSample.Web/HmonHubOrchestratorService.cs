@@ -49,89 +49,99 @@ public class HmonHubOrchestratorService(HubSampleConfig config, FactAggregator a
     }
     // Start the single, unified event processing loop
     _ = Task.Run(async () => {
-      await foreach (var evt in _orchestrator.Events.WithCancellation(_cts.Token)) {
-        var serverName = (evt as SessionConnectedEvent)?.FriendlyName ?? (evt as SessionDisconnectedEvent)?.FriendlyName ?? evt.SessionId.ToString();
+      Log.Information("OrchestratorService: Event consumer loop starting...");
+      try {
+        await foreach (var evt in _orchestrator.Events.WithCancellation(_cts.Token)) {
+          var serverName = (evt as SessionConnectedEvent)?.FriendlyName ?? (evt as SessionDisconnectedEvent)?.FriendlyName ?? evt.SessionId.ToString();
 
-        switch (evt) {
-          case SessionConnectedEvent connected:
-            Log.Information("Hub session connected: {SessionId} ({FriendlyName}) from {Host}:{Port}",
-                connected.SessionId, connected.FriendlyName, connected.Host, connected.Port);
-            try {
-              await _orchestrator.SubscribeAsync(connected.SessionId, _eventEnums);
-              await _orchestrator.PollFactsAsync(connected.SessionId, _pollFactTypes, TimeSpan.FromSeconds(_pollIntervalSeconds));
-            } catch (Exception ex) {
-              Log.Error(ex, "Failed to start polling facts for session {SessionId}", connected.SessionId);
-            }
-            break;
+          switch (evt) {
+            case SessionConnectedEvent connected:
+              Log.Information("Hub session connected: {SessionId} ({FriendlyName}) from {Host}:{Port}",
+                  connected.SessionId, connected.FriendlyName, connected.Host, connected.Port);
+              try {
+                await _orchestrator.SubscribeAsync(connected.SessionId, _eventEnums);
+                await _orchestrator.PollFactsAsync(connected.SessionId, _pollFactTypes, TimeSpan.FromSeconds(_pollIntervalSeconds));
+              } catch (Exception ex) {
+                Log.Error(ex, "Failed to start polling facts for session {SessionId}", connected.SessionId);
+              }
+              break;
 
-          case SessionDisconnectedEvent disconnected:
-            Log.Information("Hub session disconnected: {SessionId} ({FriendlyName}). Reason: {Reason}",
-                disconnected.SessionId, disconnected.FriendlyName, disconnected.Reason);
-            _aggregator.RemoveSession(serverName, disconnected.SessionId);
-            // Optionally broadcast a disconnect event to WebSocket clients
-            _wsHub?.BroadcastSessionStatusUpdate(serverName, disconnected.SessionId, "Disconnected", disconnected.Reason);
-            break;
+            case SessionDisconnectedEvent disconnected:
+              Log.Information("Hub session disconnected: {SessionId} ({FriendlyName}). Reason: {Reason}",
+                  disconnected.SessionId, disconnected.FriendlyName, disconnected.Reason);
+              _aggregator.RemoveSession(serverName, disconnected.SessionId);
+              // Optionally broadcast a disconnect event to WebSocket clients
+              _wsHub?.BroadcastSessionStatusUpdate(serverName, disconnected.SessionId, "Disconnected", disconnected.Reason);
+              break;
 
-          case FactsReceivedEvent factsEvent:
-            foreach (var fact in factsEvent.Facts.Facts) {
-              _aggregator.UpdateFact(
-                  serverName,
-                  factsEvent.SessionId,
-                  fact.Name,
-                  fact
-              );
-              _wsHub?.BroadcastFactUpdate(new FactRecord(
-                  serverName,
-                  factsEvent.SessionId,
-                  fact.Name,
-                  fact,
-                  DateTimeOffset.UtcNow
-              ));
-            }
-            break;
+            case FactsReceivedEvent factsEvent:
+              foreach (var fact in factsEvent.Facts.Facts) {
+                _aggregator.UpdateFact(
+                    serverName,
+                    factsEvent.SessionId,
+                    fact.Name,
+                    fact
+                );
+                _wsHub?.BroadcastFactUpdate(new FactRecord(
+                    serverName,
+                    factsEvent.SessionId,
+                    fact.Name,
+                    fact,
+                    DateTimeOffset.UtcNow
+                ));
+              }
+              break;
 
-          case NotificationReceivedEvent notificationEvent: {
-              var eventName = notificationEvent.Notification.Event.Name;
-              var payload = notificationEvent.Notification;
-              var timestamp = DateTimeOffset.UtcNow;
-              _aggregator.AddEvent(
-                  serverName: serverName,
-                  sessionId: notificationEvent.SessionId,
-                  eventName: eventName,
-                  payload: payload,
-                  timestamp: timestamp
-              );
-              // Immediately send event through websocket
-              _wsHub?.BroadcastEvent(
-                  serverName: serverName,
-                  sessionId: notificationEvent.SessionId,
-                  eventName: eventName,
-                  payload: payload,
-                  timestamp: timestamp
-              );
-            }
-            break;
-          case UserMessageReceivedEvent userMessageReceivedEvent: {
-              var eventName = "UserMessage";
-              var payload = userMessageReceivedEvent.Message;
-              var timestamp = DateTimeOffset.UtcNow;
-              _aggregator.AddEvent(
-                  serverName: serverName,
-                  sessionId: userMessageReceivedEvent.SessionId,
-                  eventName: eventName,
-                  payload: payload,
-                  timestamp: timestamp
-              );
-              _wsHub?.BroadcastEvent(
-                  serverName: serverName,
-                  sessionId: userMessageReceivedEvent.SessionId,
-                  eventName: eventName,
-                  payload: payload,
-                  timestamp: timestamp
-              );
-            }
-            break;
+            case NotificationReceivedEvent notificationEvent: {
+                var eventName = notificationEvent.Notification.Event.Name;
+                var payload = notificationEvent.Notification;
+                var timestamp = DateTimeOffset.UtcNow;
+                _aggregator.AddEvent(
+                    serverName: serverName,
+                    sessionId: notificationEvent.SessionId,
+                    eventName: eventName,
+                    payload: payload,
+                    timestamp: timestamp
+                );
+                // Immediately send event through websocket
+                _wsHub?.BroadcastEvent(
+                    serverName: serverName,
+                    sessionId: notificationEvent.SessionId,
+                    eventName: eventName,
+                    payload: payload,
+                    timestamp: timestamp
+                );
+              }
+              break;
+            case UserMessageReceivedEvent userMessageReceivedEvent: {
+                var eventName = "UserMessage";
+                var payload = userMessageReceivedEvent.Message;
+                var timestamp = DateTimeOffset.UtcNow;
+                _aggregator.AddEvent(
+                    serverName: serverName,
+                    sessionId: userMessageReceivedEvent.SessionId,
+                    eventName: eventName,
+                    payload: payload,
+                    timestamp: timestamp
+                );
+                _wsHub?.BroadcastEvent(
+                    serverName: serverName,
+                    sessionId: userMessageReceivedEvent.SessionId,
+                    eventName: eventName,
+                    payload: payload,
+                    timestamp: timestamp
+                );
+              }
+              break;
+          }
         }
+        Log.Information("OrchestratorService: Event consumer loop exited normally.");
+      } catch (OperationCanceledException) {
+        Log.Information("OrchestratorService: Event consumer loop canceled.");
+      } catch (Exception ex) {
+        Log.Error(ex, "OrchestratorService: Event consumer loop error.");
+      } finally {
+        Log.Information("OrchestratorService: Event consumer loop finally block reached.");
       }
     }, _cts.Token);
 

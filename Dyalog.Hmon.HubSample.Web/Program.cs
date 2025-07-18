@@ -54,17 +54,23 @@ app.MapGet("/status", () => new[] { new { name = "LocalServer", status = "Connec
 var apiConfig = config.Api;
 app.Urls.Add($"http://{apiConfig.Ip}:{apiConfig.Port}");
 
+// Register orchestrator disposal on shutdown with timeout
+app.Lifetime.ApplicationStopping.Register(() => {
+    Log.Information("Disposing orchestrator on shutdown...");
+    var disposeTask = orchestratorService.DisposeAsync().AsTask();
+    if (!disposeTask.Wait(TimeSpan.FromSeconds(10))) {
+        Log.Warning("Orchestrator disposal timed out. Forcing shutdown.");
+    }
+});
+
 if (config.AutoShutdownSeconds is int seconds && seconds > 0) {
-  using var cts = new CancellationTokenSource();
   _ = Task.Run(async () => {
     Log.Information("Auto-shutdown scheduled in {Seconds} seconds.", seconds);
-    await Task.Delay(TimeSpan.FromSeconds(seconds), cts.Token);
+    await Task.Delay(TimeSpan.FromSeconds(seconds));
     Log.Information("Auto-shutdown triggered.");
     await app.StopAsync();
   });
-  await app.RunAsync(cts.Token);
-} else {
-  await app.RunAsync();
 }
+await app.RunAsync();
 
 Log.CloseAndFlush();

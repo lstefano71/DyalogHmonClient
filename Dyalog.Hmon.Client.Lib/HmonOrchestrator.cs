@@ -24,41 +24,25 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   /// Unified asynchronous event stream for all HMON events, including lifecycle events.
   /// </summary>
   public IAsyncEnumerable<HmonEvent> Events => WatchAndCacheFacts();
-  /// <summary>
-  /// Event fired when any fact for a session is updated.
-  /// This event is now obsolete and will be removed. Please process FactsReceivedEvent from the Events stream instead.
-  /// </summary>
-  [Obsolete("OnSessionUpdated is deprecated. Please process FactsReceivedEvent from the main Events stream.")]
-  public event Action<Guid, Fact>? OnSessionUpdated;
   // Internal: watches event stream and updates fact cache
   private async IAsyncEnumerable<HmonEvent> WatchAndCacheFacts([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
   {
-    await foreach (var evt in _eventChannel.Reader.ReadAllAsync(ct)) {
-      if (evt is FactsReceivedEvent factsEvt) {
-        foreach (var fact in factsEvt.Facts.Facts) {
-          if (fact != null) {
-            _factCache[(evt.SessionId, fact.GetType())] = new FactCacheEntry(fact, DateTimeOffset.UtcNow);
-#pragma warning disable CS0618 // Type or member is obsolete
-            OnSessionUpdated?.Invoke(evt.SessionId, fact);
-#pragma warning restore CS0618 // Type or member is obsolete
-          }
+    await foreach (var evt in _eventChannel.Reader.ReadAllAsync(ct))
+    {
+        if (evt is FactsReceivedEvent factsEvt)
+        {
+            foreach (var fact in factsEvt.Facts.Facts)
+            {
+                if (fact != null)
+                {
+                    _factCache[(evt.SessionId, fact.GetType())] = new FactCacheEntry(fact, DateTimeOffset.UtcNow);
+                }
+            }
         }
-      }
-      yield return evt;
+        yield return evt;
     }
+    Log.Information("WatchAndCacheFacts: Exiting after cancellation or completion.");
   }
-  /// <summary>
-  /// Event fired when a client connects. This event is obsolete and will be removed.
-  /// Please process SessionConnectedEvent from the Events stream instead.
-  /// </summary>
-  [Obsolete("ClientConnected is deprecated. Please process SessionConnectedEvent from the main Events stream.")]
-  public event Func<ClientConnectedEventArgs, Task>? ClientConnected;
-  /// <summary>
-  /// Event fired when a client disconnects. This event is obsolete and will be removed.
-  /// Please process SessionDisconnectedEvent from the Events stream instead.
-  /// </summary>
-  [Obsolete("ClientDisconnected is deprecated. Please process SessionDisconnectedEvent from the main Events stream.")]
-  public event Func<ClientDisconnectedEventArgs, Task>? ClientDisconnected;
   /// <summary>
   /// Event fired when an error or diagnostic event occurs.
   /// </summary>
@@ -103,6 +87,9 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
               OnError?.Invoke(ex, sessionId);
               continue;
             }
+          } catch (OperationCanceledException) {
+            logger.Information("Listener accept canceled due to shutdown.");
+            break;
           } catch (Exception ex) {
             logger.Error(ex, "Listener loop error");
             OnError?.Invoke(ex, null);
@@ -110,8 +97,10 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
           }
         }
       } catch (OperationCanceledException) {
-        logger.Debug("Listener canceled");
-        // Expected when the cancellation token is triggered.
+        logger.Information("Listener stopped due to cancellation.");
+        // Optionally: do not log as error
+      } catch (Exception ex) {
+        logger.Error(ex, "Listener loop error");
       } finally {
         logger.Information("Listener stopped");
         listener.Stop();
@@ -308,18 +297,42 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   /// </summary>
   public async ValueTask DisposeAsync()
   {
+    Log.Information("Orchestrator: Starting disposal...");
     if (Interlocked.Exchange(ref _disposeCalled, 1) != 0)
-      return; // Already disposed
-    foreach (var server in _servers.Values) {
-      await server.DisposeAsync();
+    {
+        Log.Information("Orchestrator: Already disposed.");
+        return;
     }
+    Log.Information("Orchestrator: Disposing servers...");
+    foreach (var server in _servers.Values)
+    {
+        Log.Information($"Orchestrator: Disposing server {server}");
+        await server.DisposeAsync();
+    }
+    Log.Information("Orchestrator: Servers disposed.");
     _servers.Clear();
-    foreach (var connection in _connections.Values) {
-      await connection.DisposeAsync();
+
+    Log.Information("Orchestrator: Disposing connections...");
+    foreach (var connection in _connections.Values)
+    {
+        Log.Information($"Orchestrator: Disposing connection {connection}");
+        await connection.DisposeAsync();
     }
+    Log.Information("Orchestrator: Connections disposed.");
     _connections.Clear();
+
+    Log.Information("Orchestrator: Completing event channel...");
     _eventChannel.Writer.Complete();
-    await _eventChannel.Reader.Completion;
+    Log.Information("Orchestrator: Awaiting channel completion...");
+    var completionTask = _eventChannel.Reader.Completion;
+    if (await Task.WhenAny(completionTask, Task.Delay(TimeSpan.FromSeconds(10))) != completionTask)
+    {
+        Log.Warning("Orchestrator: Channel completion timed out.");
+    }
+    else
+    {
+        Log.Information("Orchestrator: Disposal complete.");
+    }
   }
   /// <summary>
   /// Gets the latest fact of type T for a session.
