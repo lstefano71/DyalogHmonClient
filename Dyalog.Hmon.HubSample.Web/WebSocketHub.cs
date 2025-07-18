@@ -37,9 +37,14 @@ public class WebSocketHub(FactAggregator aggregator)
     // Keep connection open until closed
     var buffer = new byte[1024];
     while (ws.State == WebSocketState.Open) {
-      var result = await ws.ReceiveAsync(buffer, context.RequestAborted);
-      if (result.MessageType == WebSocketMessageType.Close)
+      try {
+        var result = await ws.ReceiveAsync(buffer, context.RequestAborted);
+        if (result.MessageType == WebSocketMessageType.Close)
+          break;
+      } catch (WebSocketException ex) {
+        // Handle disconnect, log, and break loop
         break;
+      }
     }
     lock (_clients) _clients.Remove(ws);
   }

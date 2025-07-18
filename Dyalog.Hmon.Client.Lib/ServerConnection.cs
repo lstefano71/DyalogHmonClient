@@ -97,18 +97,6 @@ internal class ServerConnection : IAsyncDisposable
       });
     } catch (Exception ex) when (!(ex is OperationCanceledException && ct.IsCancellationRequested)) {
       throw new HmonConnectionException($"Failed to connect to {_host}:{_port} (SessionId={_sessionId})", ex);
-      // If we are here, the connection has either failed or has been closed.
-      // Wait for the delay before the next iteration of the loop tries to reconnect.
-      if (!ct.IsCancellationRequested)
-      {
-        try
-        {
-          await Task.Delay(delay, ct);
-          delay = TimeSpan.FromMilliseconds(delay.TotalMilliseconds * retryPolicy.BackoffMultiplier);
-          if (delay > retryPolicy.MaxDelay) delay = retryPolicy.MaxDelay;
-        }
-        catch (OperationCanceledException) { /* Loop will terminate */ }
-      }
     }
   }
   /// <summary>
