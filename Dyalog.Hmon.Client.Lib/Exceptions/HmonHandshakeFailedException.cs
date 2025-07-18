@@ -2,8 +2,6 @@ namespace Dyalog.Hmon.Client.Lib.Exceptions;
 
 using System;
 
-public class HmonHandshakeFailedException : HmonConnectionException
+public class HmonHandshakeFailedException(string reason, Exception innerException) : HmonConnectionException($"HMON handshake failed: {reason}", innerException)
 {
-    public HmonHandshakeFailedException(string reason, Exception innerException)
-        : base($"HMON handshake failed: {reason}", innerException) { }
 }

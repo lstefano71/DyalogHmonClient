@@ -1,6 +1,6 @@
-using System.Collections.Immutable;
-using System.ComponentModel.DataAnnotations;
 using Dyalog.Hmon.Client.Lib;
+
+using System.ComponentModel.DataAnnotations;
 
 namespace Dyalog.Hmon.OtelAdapter;
 
@@ -37,14 +37,14 @@ public record AdapterConfig
   /// List of events to subscribe to. If null or empty, defaults to all events.
   /// </summary>
   public List<SubscriptionEvent>? SubscribedEvents { get; set; } = [];
-    
-      /// <summary>
+
+  /// <summary>
   /// Gets the effective list of subscribed events.
   /// If the list was provided in the configuration, that list is used.
   /// Otherwise, a default list of events is returned.
   /// </summary>
   [System.Text.Json.Serialization.JsonIgnore] // Prevents this from being serialized
-    public IReadOnlyList<SubscriptionEvent> EventsToSubcribeTo =>
+  public IReadOnlyList<SubscriptionEvent> EventsToSubcribeTo =>
         SubscribedEvents is { Count: > 0 } // Check if the list from config is not null and not empty
             ? SubscribedEvents
             :

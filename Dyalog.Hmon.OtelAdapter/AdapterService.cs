@@ -27,11 +27,11 @@ public class AdapterService : BackgroundService, IAsyncDisposable
   private readonly Microsoft.Extensions.Logging.ILoggerFactory _otelLoggerFactory;
 
   // OTEL counters for cumulative metrics
-  private Counter<long>? compactionsCounter;
-  private Counter<long>? gcCollectionsCounter;
-  private Counter<long>? cpuTimeCounter;
-  private Counter<long>? connectTimeCounter;
-  private Counter<long>? keyingTimeCounter;
+  private readonly Counter<long>? compactionsCounter;
+  private readonly Counter<long>? gcCollectionsCounter;
+  private readonly Counter<long>? cpuTimeCounter;
+  private readonly Counter<long>? connectTimeCounter;
+  private readonly Counter<long>? keyingTimeCounter;
 
   /// <summary>
   /// Holds per-session metric values and tags for OTEL export.
@@ -169,10 +169,10 @@ public class AdapterService : BackgroundService, IAsyncDisposable
               _otelLogger.LogInformation("Session started {SessionId} from {Host}:{Port}", connected.SessionId, connected.Host, connected.Port);
               var pollingInterval = TimeSpan.FromMilliseconds(_adapterConfig.PollingIntervalMs);
               FactType[] factsToPoll = [FactType.Host, FactType.AccountInformation, FactType.Workspace, FactType.Threads, FactType.SuspendedThreads, FactType.ThreadCount];
-              await _orchestrator.PollFactsAsync(connected.SessionId, factsToPoll, pollingInterval, stoppingToken);
+              await _orchestrator.PollFactsAsync(connected.SessionId, factsToPoll, pollingInterval, null, stoppingToken);
               Log.Information("Started polling facts for session {SessionId}", connected.SessionId);
               SubscriptionEvent[] eventsToSubscribe = [SubscriptionEvent.All];
-              await _orchestrator.SubscribeAsync(connected.SessionId, eventsToSubscribe, stoppingToken);
+              await _orchestrator.SubscribeAsync(connected.SessionId, eventsToSubscribe, null, stoppingToken);
               Log.Information("Subscribed to all events for session {SessionId}", connected.SessionId);
               break;
 

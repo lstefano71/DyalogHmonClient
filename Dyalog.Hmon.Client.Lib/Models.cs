@@ -15,19 +15,19 @@ public record LastKnownStatePayload() : IUidPayload { public string? UID { get; 
 // Configuration
 public record HmonOrchestratorOptions
 {
-    public RetryPolicy ConnectionRetryPolicy { get; init; } = new();
+  public RetryPolicy ConnectionRetryPolicy { get; init; } = new();
 
-    /// <summary>
-    /// The maximum age of a cached fact before it is considered stale and invalid.
-    /// Defaults to 5 minutes.
-    /// </summary>
-    public TimeSpan FactCacheTTL { get; init; } = TimeSpan.FromMinutes(5);
+  /// <summary>
+  /// The maximum age of a cached fact before it is considered stale and invalid.
+  /// Defaults to 5 minutes.
+  /// </summary>
+  public TimeSpan FactCacheTTL { get; init; } = TimeSpan.FromMinutes(5);
 
-    /// <summary>
-    /// The default timeout for all commands sent to the interpreter.
-    /// This prevents calls from hanging indefinitely. Defaults to 30 seconds.
-    /// </summary>
-    public TimeSpan DefaultCommandTimeout { get; init; } = TimeSpan.FromSeconds(30);
+  /// <summary>
+  /// The default timeout for all commands sent to the interpreter.
+  /// This prevents calls from hanging indefinitely. Defaults to 30 seconds.
+  /// </summary>
+  public TimeSpan DefaultCommandTimeout { get; init; } = TimeSpan.FromSeconds(30);
 }
 public record RetryPolicy
 {
