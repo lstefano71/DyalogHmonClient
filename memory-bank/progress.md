@@ -1,9 +1,10 @@
 # Progress: HMON-to-OTEL Adapter
 
-_Last reviewed: 2025-07-17 17:51 CEST_
+_Last reviewed: 2025-07-18 17:30 CEST_
 
 ## What works
 - Project focus is on hmon-to-otel-adapter.
+- ADR #1: HmonOrchestrator now exposes a single, unified event stream; all obsolete event-based APIs have been removed.
 - Feature Brief #4: Configurable, per-command timeouts implemented in Dyalog.Hmon.Client.Lib.
 - Memory bank and TODOs reviewed and confirmed up to date.
 - Architectural, product, and technical context established.
@@ -17,6 +18,7 @@ _Last reviewed: 2025-07-17 17:51 CEST_
 
 ## Completed Tasks
 
+- ADR #1: Refactored HmonOrchestrator to use a unified event stream and removed obsolete events (2025-07-18).
 - Feature Brief #4: Configurable, per-command timeouts for orchestrator (2025-07-17).
 - Feature Brief #2: Typed, specific exceptions for error handling (2025-07-17).
 - Feature Brief #1: Polly-based retry logic for resilient connection management implemented in ServerConnection.cs (2025-07-17).
@@ -55,6 +57,7 @@ _Last reviewed: 2025-07-17 17:51 CEST_
 - Project is now fully documented, including usage examples in [docs/hmon_to_otel_adapter.md](../docs/hmon_to_otel_adapter.md).
 
 ## Current status
+- ADR #1 (unified event stream, obsolete events removed) completed and documented.
 - Feature Brief #4 (configurable, per-command timeouts) completed and documented.
 - Feature Brief #2 (typed, specific exceptions for error handling) completed and documented.
 - Feature Brief #1 (Polly integration for connection retries) completed and documented.
@@ -66,6 +69,7 @@ _Last reviewed: 2025-07-17 17:51 CEST_
 - No adapter code implemented yet.
 
 ## Evolution of project decisions
+- ADR #1: Adopted unified event stream and removed obsolete event-based APIs as of 2025-07-18.
 - Feature Brief #4: Adopted configurable, per-command timeouts for orchestrator as of 2025-07-17.
 - Feature Brief #2: Adopted typed, specific exceptions for error handling in Dyalog.Hmon.Client.Lib as of 2025-07-17.
 - Feature Brief #1: Adopted Polly for resilient connection retries in ServerConnection.cs as of 2025-07-17.
