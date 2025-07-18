@@ -171,9 +171,10 @@ public class AdapterService : BackgroundService, IAsyncDisposable
               FactType[] factsToPoll = [FactType.Host, FactType.AccountInformation, FactType.Workspace, FactType.Threads, FactType.SuspendedThreads, FactType.ThreadCount];
               await _orchestrator.PollFactsAsync(connected.SessionId, factsToPoll, pollingInterval, null, stoppingToken);
               Log.Information("Started polling facts for session {SessionId}", connected.SessionId);
-              SubscriptionEvent[] eventsToSubscribe = [SubscriptionEvent.All];
-              await _orchestrator.SubscribeAsync(connected.SessionId, eventsToSubscribe, null, stoppingToken);
-              Log.Information("Subscribed to all events for session {SessionId}", connected.SessionId);
+
+              await _orchestrator.SubscribeAsync(connected.SessionId, _adapterConfig.EventsToSubcribeTo, null, stoppingToken);
+              Log.Information("Subscribed to events {events} for session {SessionId}",
+                _adapterConfig.EventsToSubcribeTo, connected.SessionId);
               break;
 
             case SessionDisconnectedEvent disconnected:
@@ -312,14 +313,18 @@ public class AdapterService : BackgroundService, IAsyncDisposable
   /// <param name="stoppingToken">Cancellation token for graceful shutdown.</param>
   private async Task HandleNotificationReceivedEventAsync(NotificationReceivedEvent notificationEvent, CancellationToken stoppingToken)
   {
-    var sessionId = notificationEvent.SessionId;
+   var sessionId = notificationEvent.SessionId;
     var logAttributes = new Dictionary<string, object> {
       ["service.name"] = _adapterConfig.ServiceName,
-      ["session.id"] = sessionId.ToString(),
+      ["session.id"] = sessionId,
       ["notification.uid"] = notificationEvent.Notification.UID
     };
+    var eventName = notificationEvent.Notification.Event?.Name ?? "Unknown";
+    Log.Debug("{session.id} Processing NotificationReceivedEvent with event {event.name}",
+      sessionId, eventName);
+
     MergeSessionTagsIntoAttributes(sessionId.ToString(), logAttributes);
-    switch (notificationEvent.Notification.Event.Name) {
+    switch (eventName) {
       case "UntrappedSignal":
       case "TrappedSignal":
         var n = notificationEvent.Notification;
@@ -341,7 +346,7 @@ public class AdapterService : BackgroundService, IAsyncDisposable
 
         _otelLogger.LogErrorWithContext(logAttributes,
             "Event received {event.name} {dmx.category} '{dmx.message}' {dyalog.signal.stack} {dyalog.signal.thread_info}",
-            n.Event?.Name,
+            eventName,
             dmx?.Category,
             dmx?.Message,
             n.Stack,
@@ -350,7 +355,7 @@ public class AdapterService : BackgroundService, IAsyncDisposable
       case "WorkspaceResize":
         _otelLogger.LogInformationWithContext(logAttributes,
             "Event received {event.name} {resize.new_size}",
-            notificationEvent.Notification.Event.Name,
+            eventName,
             notificationEvent.Notification.Size);
         break;
       default:
@@ -366,6 +371,9 @@ public class AdapterService : BackgroundService, IAsyncDisposable
   private void HandleUserMessageReceivedEvent(UserMessageReceivedEvent userMsgEvent)
   {
     var sessionId = userMsgEvent.SessionId != Guid.Empty ? userMsgEvent.SessionId.ToString() : "default";
+    Log.Debug("{session.id} Processing NotificationReceivedEvent with event {event.name}",
+      sessionId, "UserMessage");
+
     var logAttributes = new Dictionary<string, object> {
       ["service.name"] = _adapterConfig.ServiceName,
       ["session.id"] = sessionId,
