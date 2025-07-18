@@ -1,12 +1,10 @@
-﻿// Example streamlined consumer workflow for Dyalog.Hmon.Client
-using Dyalog.Hmon.Client.Lib;
+﻿using Dyalog.Hmon.Client.Lib;
 
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
 using System.Collections.Concurrent;
 using System.Globalization;
-
 class SessionFacts
 {
   public WorkspaceFact? Workspace { get; set; }
@@ -16,69 +14,62 @@ class SessionFacts
   public ThreadsFact? Threads { get; set; }
   public SuspendedThreadsFact? SuspendedThreads { get; set; }
 }
-
 class Program
 {
   static int _carouselStep = 0;
-
   static async Task RunMonitoringService(CancellationToken cancellationToken)
   {
     AnsiConsole.MarkupLine("[bold green]Starting Dyalog.Hmon.Client monitoring service...[/]");
-
     await using var orchestrator = new HmonOrchestrator();
-
     var servers = new ConcurrentDictionary<Guid, (string Name, string Host)>();
     var facts = new ConcurrentDictionary<Guid, SessionFacts>();
     var recentEvents = new ConcurrentDictionary<Guid, List<string>>();
-    var builders = new ConcurrentDictionary<Guid, SessionMonitorBuilder>();
 
-    orchestrator.ClientConnected += async (args) => {
-      servers[args.SessionId] = (args.FriendlyName ?? args.Host, args.Host);
+    var listenerTask = orchestrator.StartListenerAsync("0.0.0.0", 4501, cancellationToken);
 
-      var builder = new SessionMonitorBuilder(orchestrator, args.SessionId)
-          .SubscribeTo(SubscriptionEvent.UntrappedSignal)
-          .PollFacts(TimeSpan.FromSeconds(5),
-              FactType.Workspace, FactType.ThreadCount, FactType.Host,
-              FactType.AccountInformation, FactType.Threads, FactType.SuspendedThreads)
-          .OnFactChanged(async fact => {
-            var sessionFacts = facts.GetOrAdd(args.SessionId, _ => new SessionFacts());
-            switch (fact) {
-              case WorkspaceFact ws: sessionFacts.Workspace = ws; break;
-              case ThreadCountFact tc: sessionFacts.ThreadCount = tc; break;
-              case HostFact host: sessionFacts.Host = host; break;
-              case AccountInformationFact acc: sessionFacts.AccountInformation = acc; break;
-              case ThreadsFact threads: sessionFacts.Threads = threads; break;
-              case SuspendedThreadsFact sthreads: sessionFacts.SuspendedThreads = sthreads; break;
+    var processingTask = Task.Run(async () => {
+      await foreach (var hmonEvent in orchestrator.Events.WithCancellation(cancellationToken)) {
+        switch (hmonEvent) {
+          case SessionConnectedEvent connected:
+            servers[connected.SessionId] = (connected.FriendlyName ?? connected.Host, connected.Host);
+            facts.TryAdd(connected.SessionId, new SessionFacts());
+            recentEvents.TryAdd(connected.SessionId, []);
+            AnsiConsole.MarkupLine($"[bold green]Session connected:[/] {connected.SessionId} from {connected.Host}:{connected.Port}");
+            try {
+              await orchestrator.SubscribeAsync(connected.SessionId, [SubscriptionEvent.UntrappedSignal], cancellationToken);
+              await orchestrator.PollFactsAsync(connected.SessionId,
+                  [FactType.Workspace, FactType.ThreadCount, FactType.Host, FactType.AccountInformation, FactType.Threads, FactType.SuspendedThreads],
+                  TimeSpan.FromSeconds(5),
+                  cancellationToken);
+            } catch (Exception ex) {
+              AnsiConsole.MarkupLine($"[bold red]Error configuring session {connected.SessionId}:[/] {ex.Message}");
             }
-            await Task.CompletedTask;
-          })
-          .OnEvent(async evt => {
-            var eventList = recentEvents.GetOrAdd(args.SessionId, _ => []);
-            eventList.Insert(0, evt.GetType().Name);
+            break;
+          case SessionDisconnectedEvent disconnected:
+            servers.TryRemove(disconnected.SessionId, out _);
+            facts.TryRemove(disconnected.SessionId, out _);
+            recentEvents.TryRemove(disconnected.SessionId, out _);
+            AnsiConsole.MarkupLine($"[bold red]Session disconnected:[/] {disconnected.SessionId}. Reason: {disconnected.Reason}");
+            break;
+          case FactsReceivedEvent factsEvt:
+            var sessionFacts = facts.GetOrAdd(factsEvt.SessionId, _ => new SessionFacts());
+            foreach (var fact in factsEvt.Facts.Facts) {
+              switch (fact) {
+                case WorkspaceFact ws: sessionFacts.Workspace = ws; break;
+                case ThreadCountFact tc: sessionFacts.ThreadCount = tc; break;
+                case HostFact host: sessionFacts.Host = host; break;
+                case AccountInformationFact acc: sessionFacts.AccountInformation = acc; break;
+                case ThreadsFact threads: sessionFacts.Threads = threads; break;
+                case SuspendedThreadsFact sthreads: sessionFacts.SuspendedThreads = sthreads; break;
+              }
+            }
+            break;
+          default:
+            var eventList = recentEvents.GetOrAdd(hmonEvent.SessionId, _ => []);
+            eventList.Insert(0, hmonEvent.GetType().Name);
             if (eventList.Count > 10) eventList.RemoveAt(eventList.Count - 1);
-            await Task.CompletedTask;
-          })
-          .WithCancellation(cancellationToken);
-
-      builders[args.SessionId] = builder;
-      await builder.StartAsync();
-    };
-
-    orchestrator.ClientDisconnected += (args) => {
-      servers.TryRemove(args.SessionId, out _);
-      facts.TryRemove(args.SessionId, out _);
-      recentEvents.TryRemove(args.SessionId, out _);
-      if (builders.TryRemove(args.SessionId, out var builder)) {
-        // No explicit stop needed; WithCancellation handles it
-      }
-      return Task.CompletedTask;
-    };
-
-    var listener = orchestrator.StartListenerAsync("0.0.0.0", 4501, cancellationToken).ContinueWith(t => {
-      if (t.IsFaulted) {
-        AnsiConsole.MarkupLine("[bold red]Failed to start listener:[/] " + t.Exception?.GetBaseException().Message);
-      } else {
-        AnsiConsole.MarkupLine("[bold green]Listener started successfully.[/]");
+            break;
+        }
       }
     }, cancellationToken);
 
@@ -93,7 +84,6 @@ class Program
                   .AddColumn("SessionId")
                   .AddColumn("Name")
                   .AddColumn("Facts");
-
           foreach (var (sessionId, (name, host)) in servers) {
             IRenderable sessionIdCell;
             if (facts.TryGetValue(sessionId, out var sessionFacts) && sessionFacts.Host is not null) {
@@ -105,17 +95,14 @@ class Program
             } else {
               sessionIdCell = new Text(sessionId.ToString());
             }
-
             IRenderable factCell;
             if (facts.TryGetValue(sessionId, out sessionFacts)) {
               factCell = RenderFactsTableCarousel(sessionFacts, _carouselStep);
             } else {
               factCell = new Text("");
             }
-
             table.AddRow(sessionIdCell, new Text(name), factCell);
           }
-
           ctx.UpdateTarget(table);
           _carouselStep++;
           await Task.Delay(5000, cancellationToken);
@@ -125,9 +112,8 @@ class Program
       }
     });
 
-    await orchestrator.DisposeAsync();
+    await Task.WhenAll(listenerTask, processingTask);
   }
-
   static IRenderable RenderFactsTable(SessionFacts facts)
   {
     var grid = new Grid();
@@ -145,7 +131,6 @@ class Program
       grid.AddRow(RenderAccountInformationFactTable(facts.AccountInformation));
     return grid;
   }
-
   static Table RenderWorkspaceFactTable(WorkspaceFact ws)
   {
     var table = new Table();
@@ -167,7 +152,6 @@ class Program
     table.AddRow("TrapReserveActual", ws.TrapReserveActual.ToString("N0", CultureInfo.InvariantCulture));
     return table;
   }
-
   static Table RenderThreadCountFactTable(ThreadCountFact tc)
   {
     var table = new Table();
@@ -178,7 +162,6 @@ class Program
     table.AddRow("Suspended", tc.Suspended.ToString());
     return table;
   }
-
   static Table RenderHostFactTable(HostFact host, string hostName)
   {
     var table = new Table();
@@ -202,7 +185,6 @@ class Program
     table.AddRow("RIDE.Port6", host.RIDE.Port6?.ToString() ?? "");
     return table;
   }
-
   static Table RenderAccountInformationFactTable(AccountInformationFact acc)
   {
     var table = new Table();
@@ -215,7 +197,6 @@ class Program
     table.AddRow("KeyingTime", acc.KeyingTime.ToString("N0"));
     return table;
   }
-
   static Table RenderThreadsFactTable(ThreadsFact threads)
   {
     var table = new Table();
@@ -238,7 +219,6 @@ class Program
     }
     return table;
   }
-
   static Table RenderSuspendedThreadsFactTable(SuspendedThreadsFact threads)
   {
     var table = new Table();
@@ -261,7 +241,6 @@ class Program
     }
     return table;
   }
-
   static async Task Main(string[] args)
   {
     using var cts = new CancellationTokenSource();
@@ -274,7 +253,6 @@ class Program
       // Graceful shutdown
     }
   }
-
   static IRenderable RenderFactsTableCarousel(SessionFacts facts, int step)
   {
     var tables = new List<IRenderable>();

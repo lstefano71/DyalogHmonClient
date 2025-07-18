@@ -9,25 +9,27 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
-
 /// <summary>
 /// Represents a single HMON protocol connection, handling only HMON-specific parsing and dispatch.
 /// </summary>
 internal class HmonConnection : IAsyncDisposable
 {
   private readonly DrptFramer _hmonFramer;
-
   private readonly ILogger _logger;
   private readonly TcpClient _tcpClient;
-
   private readonly Guid _sessionId;
   private readonly ChannelWriter<HmonEvent> _eventWriter;
-  private readonly Func<Task>? _onDisconnect;
-  private readonly Func<ClientConnectedEventArgs, Task>? _onClientConnected;
+  private readonly Func<string, Task>? _onDisconnect;
   private readonly CancellationTokenSource _cts = new();
   private readonly ConcurrentDictionary<string, TaskCompletionSource<HmonEvent>> _pendingRequests = new();
   private readonly TaskCompletionSource<bool> _pipeReadyTcs = new();
   private Task? _processingTask; // Track the background processing task
+
+  /// <summary>
+  /// A task that completes when the connection's processing loop terminates.
+  /// </summary>
+  public Task Completion => _processingTask;
+
 
   /// <summary>
   /// Initializes a new HmonConnection for the given TCP client and session.
@@ -36,18 +38,15 @@ internal class HmonConnection : IAsyncDisposable
   /// <param name="sessionId">Session identifier.</param>
   /// <param name="eventWriter">Channel writer for events.</param>
   /// <param name="onDisconnect">Optional disconnect callback.</param>
-  /// <param name="onClientConnected">Optional client connected callback.</param>
-  public HmonConnection(TcpClient tcpClient, Guid sessionId, ChannelWriter<HmonEvent> eventWriter, Func<Task>? onDisconnect = null, Func<ClientConnectedEventArgs, Task>? onClientConnected = null)
+  public HmonConnection(TcpClient tcpClient, Guid sessionId, ChannelWriter<HmonEvent> eventWriter, Func<string, Task>? onDisconnect = null)
   {
     _logger = Log.Logger.ForContext<HmonConnection>();
     _tcpClient = tcpClient;
     _sessionId = sessionId;
     _eventWriter = eventWriter;
     _onDisconnect = onDisconnect;
-    _onClientConnected = onClientConnected;
     _hmonFramer = new DrptFramer("HMON", _tcpClient.GetStream());
   }
-
   /// <summary>
   /// Performs the HMON handshake and starts processing messages.
   /// </summary>
@@ -59,20 +58,16 @@ internal class HmonConnection : IAsyncDisposable
   {
     try {
       _logger.Debug("Initializing HmonConnection (SessionId={SessionId})", _sessionId);
-
-      _processingTask = StartProcessingAsync(ct); // Track the task
+      _processingTask = StartProcessingAsync(remoteAddress, remotePort, friendlyName, ct); // Pass details for disconnect event
       await _pipeReadyTcs.Task; // Wait for pipe to be ready (handshake completed)
 
-      if (_onClientConnected != null) {
-        _logger.Debug("Firing ClientConnected event from HmonConnection (SessionId={SessionId})", _sessionId);
-        await _onClientConnected.Invoke(new ClientConnectedEventArgs(_sessionId, remoteAddress, remotePort, friendlyName));
-      }
+      _logger.Debug("Firing SessionConnectedEvent from HmonConnection (SessionId={SessionId})", _sessionId);
+      await _eventWriter.WriteAsync(new SessionConnectedEvent(_sessionId, remoteAddress, remotePort, friendlyName), ct);
     } catch (Exception ex) {
       _logger.Error(ex, "HmonConnection initialization failed (SessionId={SessionId})", _sessionId);
       throw;
     }
   }
-
   /// <summary>
   /// Sends a command to the interpreter and awaits a strongly-typed event response.
   /// </summary>
@@ -90,13 +85,10 @@ internal class HmonConnection : IAsyncDisposable
       actualPayload = payload;
     }
 
-    var stream = _tcpClient.GetStream();
     var json = JsonSerializer.Serialize(new object[] { command, actualPayload });
     var bytes = Encoding.UTF8.GetBytes(json);
-
     _logger.Debug("SEND Message: {Json}", json);
     await _hmonFramer.WriteFrameAsync(bytes, ct);
-
     if (uid != null) {
       var tcs = new TaskCompletionSource<HmonEvent>();
       _pendingRequests.TryAdd(uid, tcs);
@@ -109,55 +101,53 @@ internal class HmonConnection : IAsyncDisposable
       return default!;
     }
   }
-
-  private async Task StartProcessingAsync(CancellationToken ct)
+  private async Task StartProcessingAsync(string host, int port, string? friendlyName, CancellationToken ct)
   {
+    string reason = "Unknown";
     try {
       var pipeReader = PipeReader.Create(_tcpClient.GetStream());
       // Perform handshake using DrptFramer
       bool handshakeOk = await _hmonFramer.PerformHandshakeAsync(ct);
       if (!handshakeOk) {
+        reason = "Handshake failed";
         throw new Exception($"Handshake failed for session: {_sessionId}.");
       }
-
       _pipeReadyTcs.TrySetResult(true);
       _logger.Debug("Handshake completed for session {SessionId}", _sessionId);
-
       // Main message loop
       while (!ct.IsCancellationRequested) {
         var message = await _hmonFramer.ReadNextMessageAsync(ParseAndDispatchMessageAsync, ct);
       }
+      reason = "Cancellation requested";
     } catch (OperationCanceledException) {
+      reason = "Operation canceled";
       _logger.Debug("StartProcessingAsync canceled for session {SessionId}", _sessionId);
     } catch (Exception ex) {
+      reason = ex.Message;
       _logger.Error(ex, "Exception in StartProcessingAsync for session {SessionId}", _sessionId);
     } finally {
       if (_onDisconnect != null) {
-        await _onDisconnect.Invoke();
+        await _onDisconnect.Invoke(reason);
+      } else {
+        await _eventWriter.WriteAsync(new SessionDisconnectedEvent(_sessionId, host, port, friendlyName, reason), ct);
       }
     }
   }
-
   // Add a static field to cache JsonSerializerOptions
   private static readonly JsonSerializerOptions CachedJsonSerializerOptions = new() {
     Converters = { new FactJsonConverter() }
   };
-
   // Update the code to use the cached JsonSerializerOptions instance
   private async Task ParseAndDispatchMessageAsync(ReadOnlySequence<byte> message)
   {
     var reader = new Utf8JsonReader(message);
     if (!reader.Read() || reader.TokenType != JsonTokenType.StartArray)
       return;
-
     if (!reader.Read() || reader.TokenType != JsonTokenType.String)
       return;
-
     var command = reader.GetString();
-
     if (!reader.Read())
       return;
-
     HmonEvent? hmonEvent =
         command switch {
           "Facts" => new FactsReceivedEvent(
@@ -178,7 +168,6 @@ internal class HmonConnection : IAsyncDisposable
           "DisallowedUID" => new DisallowedUidEvent(_sessionId, JsonSerializer.Deserialize<DisallowedUidResponse>(ref reader, HmonJsonContext.Default.DisallowedUidResponse)!),
           _ => null
         };
-
     if (hmonEvent != null) {
       var uid = GetUid(hmonEvent);
       if (uid != null && _pendingRequests.TryRemove(uid, out var tcs)) {
@@ -188,7 +177,6 @@ internal class HmonConnection : IAsyncDisposable
       }
     }
   }
-
   private static string? GetUid(HmonEvent hmonEvent)
   {
     return hmonEvent switch {
@@ -204,7 +192,6 @@ internal class HmonConnection : IAsyncDisposable
       _ => null
     };
   }
-
   /// <summary>
   /// Disposes the connection and releases resources.
   /// </summary>

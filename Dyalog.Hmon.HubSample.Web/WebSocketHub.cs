@@ -1,32 +1,26 @@
 using System.Net.WebSockets;
 using System.Text.Json;
 using System.Threading.Channels;
-
 namespace Dyalog.Hmon.HubSample.Web;
-
 public class WebSocketHub(FactAggregator aggregator)
 {
   private readonly FactAggregator _aggregator = aggregator;
   private readonly List<WebSocket> _clients = [];
   private readonly Channel<object> _updates = Channel.CreateUnbounded<object>();
-
   public async Task HandleWebSocketAsync(HttpContext context)
   {
     if (!context.WebSockets.IsWebSocketRequest) {
       context.Response.StatusCode = 400;
       return;
     }
-
     using var ws = await context.WebSockets.AcceptWebSocketAsync();
     lock (_clients) _clients.Add(ws);
-
     // Send initial snapshot
     var snapshot = new {
       type = "snapshot",
       payload = new { facts = _aggregator.GetAllFacts() }
     };
     await ws.SendAsync(JsonSerializer.SerializeToUtf8Bytes(snapshot), WebSocketMessageType.Text, true, context.RequestAborted);
-
     // Listen for updates
     var reader = _updates.Reader;
     var sendTask = Task.Run(async () => {
@@ -36,7 +30,6 @@ public class WebSocketHub(FactAggregator aggregator)
         }
       }
     });
-
     // Keep connection open until closed
     var buffer = new byte[1024];
     while (ws.State == WebSocketState.Open) {
@@ -44,10 +37,8 @@ public class WebSocketHub(FactAggregator aggregator)
       if (result.MessageType == WebSocketMessageType.Close)
         break;
     }
-
     lock (_clients) _clients.Remove(ws);
   }
-
   public void BroadcastFactUpdate(FactRecord record)
   {
     var update = new {
@@ -64,7 +55,6 @@ public class WebSocketHub(FactAggregator aggregator)
     };
     _updates.Writer.TryWrite(update);
   }
-
   public void BroadcastEvent(string serverName, Guid sessionId, string eventName, object? payload, DateTimeOffset timestamp)
   {
     var evt = new {
@@ -78,5 +68,20 @@ public class WebSocketHub(FactAggregator aggregator)
       }
     };
     _updates.Writer.TryWrite(evt);
+  }
+
+  // NEW METHOD to inform clients of disconnections
+  public void BroadcastSessionStatusUpdate(string serverName, Guid sessionId, string status, string reason)
+  {
+    var update = new {
+      type = "sessionStatus",
+      payload = new {
+        serverName,
+        sessionId,
+        status, // e.g., "Disconnected"
+        reason
+      }
+    };
+    _updates.Writer.TryWrite(update);
   }
 }

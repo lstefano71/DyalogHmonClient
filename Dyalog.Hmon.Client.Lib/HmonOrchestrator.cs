@@ -4,9 +4,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Channels;
-
 namespace Dyalog.Hmon.Client.Lib;
-
 /// <summary>
 /// Central orchestrator for managing HMON connections and exposing a unified event stream.
 /// </summary>
@@ -16,24 +14,20 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   private readonly Channel<HmonEvent> _eventChannel = Channel.CreateUnbounded<HmonEvent>();
   private readonly ConcurrentDictionary<Guid, HmonConnection> _connections = new();
   private readonly ConcurrentDictionary<Guid, ServerConnection> _servers = new();
-
   // Fact cache: (sessionId, factType) -> FactCacheEntry
   private readonly ConcurrentDictionary<(Guid, Type), FactCacheEntry> _factCache = new();
-
   public readonly record struct FactCacheEntry(Fact Fact, DateTimeOffset LastUpdated);
-
   private int _disposeCalled = 0;
-
   /// <summary>
-  /// Unified asynchronous event stream for all HMON events.
+  /// Unified asynchronous event stream for all HMON events, including lifecycle events.
   /// </summary>
   public IAsyncEnumerable<HmonEvent> Events => WatchAndCacheFacts();
-
   /// <summary>
   /// Event fired when any fact for a session is updated.
+  /// This event is now obsolete and will be removed. Please process FactsReceivedEvent from the Events stream instead.
   /// </summary>
+  [Obsolete("OnSessionUpdated is deprecated. Please process FactsReceivedEvent from the main Events stream.")]
   public event Action<Guid, Fact>? OnSessionUpdated;
-
   // Internal: watches event stream and updates fact cache
   private async IAsyncEnumerable<HmonEvent> WatchAndCacheFacts([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
   {
@@ -42,28 +36,31 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
         foreach (var fact in factsEvt.Facts.Facts) {
           if (fact != null) {
             _factCache[(evt.SessionId, fact.GetType())] = new FactCacheEntry(fact, DateTimeOffset.UtcNow);
+#pragma warning disable CS0618 // Type or member is obsolete
             OnSessionUpdated?.Invoke(evt.SessionId, fact);
+#pragma warning restore CS0618 // Type or member is obsolete
           }
         }
       }
       yield return evt;
     }
   }
-
   /// <summary>
-  /// Event fired when a client connects.
+  /// Event fired when a client connects. This event is obsolete and will be removed.
+  /// Please process SessionConnectedEvent from the Events stream instead.
   /// </summary>
+  [Obsolete("ClientConnected is deprecated. Please process SessionConnectedEvent from the main Events stream.")]
   public event Func<ClientConnectedEventArgs, Task>? ClientConnected;
   /// <summary>
-  /// Event fired when a client disconnects.
+  /// Event fired when a client disconnects. This event is obsolete and will be removed.
+  /// Please process SessionDisconnectedEvent from the Events stream instead.
   /// </summary>
+  [Obsolete("ClientDisconnected is deprecated. Please process SessionDisconnectedEvent from the main Events stream.")]
   public event Func<ClientDisconnectedEventArgs, Task>? ClientDisconnected;
-
   /// <summary>
   /// Event fired when an error or diagnostic event occurs.
   /// </summary>
   public event Action<Exception, Guid?>? OnError;
-
   /// <summary>
   /// Starts a TCP listener for incoming HMON connections (POLL mode).
   /// </summary>
@@ -76,7 +73,6 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
       var listener = new TcpListener(IPAddress.Parse(host), port);
       listener.Start();
       ct.Register(() => listener.Stop());
-
       var logger = Log.Logger.ForContext<HmonOrchestrator>();
       try {
         while (!ct.IsCancellationRequested) {
@@ -89,17 +85,13 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
                 tcpClient,
                 sessionId,
                 _eventChannel.Writer,
-                async () => {
+                async (reason) => {
                   logger.Debug("Connection closed (SessionId={SessionId})", sessionId);
                   _connections.TryRemove(sessionId, out _);
-                  if (ClientDisconnected != null) {
-                    await ClientDisconnected.Invoke(new ClientDisconnectedEventArgs(sessionId, remoteEndPoint.Address.ToString(), remoteEndPoint.Port, null, "Remote client disconnected"));
-                  }
-                },
-                (args) => { return ClientConnected != null ? ClientConnected.Invoke(args) : Task.CompletedTask; } // Pass the ClientConnected event handler
+                  await _eventChannel.Writer.WriteAsync(new SessionDisconnectedEvent(sessionId, remoteEndPoint.Address.ToString(), remoteEndPoint.Port, null, reason));
+                }
             );
             _connections.TryAdd(sessionId, connection);
-
             try {
               await connection.InitializeAsync(remoteEndPoint.Address.ToString(), remoteEndPoint.Port, null, ct);
             } catch (Exception ex) {
@@ -124,7 +116,6 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
       }
     }, ct);
   }
-
   /// <summary>
   /// Adds a remote HMON server (SERVE mode) and starts connection management.
   /// </summary>
@@ -137,14 +128,11 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
     var sessionId = Guid.NewGuid();
     var server = new ServerConnection(
         host, port, friendlyName, _options, _eventChannel.Writer, sessionId,
-        (args) => ClientConnected?.Invoke(args),
-        (args) => ClientDisconnected?.Invoke(args),
         (conn) => _connections.TryAdd(sessionId, conn)
     );
     _servers.TryAdd(sessionId, server);
     return sessionId;
   }
-
   /// <summary>
   /// Removes and disposes a server connection by session ID.
   /// </summary>
@@ -155,7 +143,6 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
       await server.DisposeAsync();
     }
   }
-
   /// <summary>
   /// Requests a one-time snapshot of facts from the interpreter.
   /// </summary>
@@ -179,7 +166,6 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
       throw;
     }
   }
-
   /// <summary>
   /// Requests a high-priority status report from the interpreter.
   /// </summary>
@@ -201,7 +187,6 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
       throw;
     }
   }
-
   /// <summary>
   /// Starts polling facts from the interpreter at a given interval.
   /// </summary>
@@ -224,7 +209,6 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
       throw;
     }
   }
-
   /// <summary>
   /// Stops any active facts polling for the given session.
   /// </summary>
@@ -245,7 +229,6 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
       throw;
     }
   }
-
   /// <summary>
   /// Triggers an immediate facts message from an active poll.
   /// </summary>
@@ -266,7 +249,6 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
       throw;
     }
   }
-
   /// <summary>
   /// Subscribes to interpreter events for the given session.
   /// </summary>
@@ -288,7 +270,6 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
       throw;
     }
   }
-
   /// <summary>
   /// Requests the interpreter to connect to a RIDE client.
   /// </summary>
@@ -316,7 +297,6 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
       throw;
     }
   }
-
   /// <summary>
   /// Requests the interpreter to disconnect from any RIDE client.
   /// </summary>
@@ -338,7 +318,6 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
       throw;
     }
   }
-
   /// <summary>
   /// Disposes all managed connections and resources.
   /// </summary>
@@ -346,21 +325,17 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   {
     if (Interlocked.Exchange(ref _disposeCalled, 1) != 0)
       return; // Already disposed
-
     foreach (var server in _servers.Values) {
       await server.DisposeAsync();
     }
     _servers.Clear();
-
     foreach (var connection in _connections.Values) {
       await connection.DisposeAsync();
     }
     _connections.Clear();
-
     _eventChannel.Writer.Complete();
     await _eventChannel.Reader.Completion;
   }
-
   /// <summary>
   /// Gets the latest fact of type T for a session, or null if not available.
   /// </summary>
@@ -368,7 +343,6 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   {
     return _factCache.TryGetValue((sessionId, typeof(T)), out var entry) ? entry.Fact as T : null;
   }
-
   /// <summary>
   /// Gets the latest fact for a session and fact type, or null if not available.
   /// </summary>
@@ -376,7 +350,6 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   {
     return _factCache.TryGetValue((sessionId, factType), out var entry) ? entry.Fact : null;
   }
-
   /// <summary>
   /// Gets the latest fact and timestamp for a session and fact type, or null if not available.
   /// </summary>
@@ -386,7 +359,6 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
       return (entry.Fact as T, entry.LastUpdated);
     return (null, null);
   }
-
   /// <summary>
   /// Gets the latest fact and timestamp for a session and fact type, or null if not available.
   /// </summary>

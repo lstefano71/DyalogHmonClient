@@ -1,9 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-
 namespace Dyalog.Hmon.Client.Lib;
-
 // Marker interface for payloads that support UID correlation
 public interface IUidPayload
 {
@@ -14,13 +12,11 @@ public record GetFactsPayload(int[] Facts) : IUidPayload { public string? UID { 
 public record PollFactsPayload(int[] Facts, int Interval) : IUidPayload { public string? UID { get; set; } }
 public record SubscribePayload(int[] Events) : IUidPayload { public string? UID { get; set; } }
 public record LastKnownStatePayload() : IUidPayload { public string? UID { get; set; } }
-
 // Configuration
 public record HmonOrchestratorOptions
 {
   public RetryPolicy ConnectionRetryPolicy { get; init; } = new();
 }
-
 public record RetryPolicy
 {
   public TimeSpan InitialDelay { get; init; } = TimeSpan.FromSeconds(1);
@@ -31,9 +27,11 @@ public record RetryPolicy
 // Lifecycle
 public record ClientConnectedEventArgs(Guid SessionId, string Host, int Port, string? FriendlyName);
 public record ClientDisconnectedEventArgs(Guid SessionId, string Host, int Port, string? FriendlyName, string Reason);
-
 // Events
 public abstract record HmonEvent(Guid SessionId);
+// NEW: Lifecycle events are now part of the unified stream
+public record SessionConnectedEvent(Guid SessionId, string Host, int Port, string? FriendlyName) : HmonEvent(SessionId);
+public record SessionDisconnectedEvent(Guid SessionId, string Host, int Port, string? FriendlyName, string Reason) : HmonEvent(SessionId);
 public record FactsReceivedEvent(Guid SessionId, FactsResponse Facts) : HmonEvent(SessionId);
 public record NotificationReceivedEvent(Guid SessionId, NotificationResponse Notification) : HmonEvent(SessionId);
 public record LastKnownStateReceivedEvent(Guid SessionId, LastKnownStateResponse State) : HmonEvent(SessionId);
@@ -44,10 +42,8 @@ public record UnknownCommandEvent(Guid SessionId, UnknownCommandResponse Error) 
 public record MalformedCommandEvent(Guid SessionId, MalformedCommandResponse Error) : HmonEvent(SessionId);
 public record InvalidSyntaxEvent(Guid SessionId, InvalidSyntaxResponse Error) : HmonEvent(SessionId);
 public record DisallowedUidEvent(Guid SessionId, DisallowedUidResponse Error) : HmonEvent(SessionId);
-
 // Payloads
 public record FactsResponse(string? UID, int? Interval, IEnumerable<Fact> Facts);
-
 public abstract record Fact(int ID, string Name)
 {
   public FactType FactType => (FactType)ID;
@@ -99,17 +95,13 @@ public class FactJsonConverter : JsonConverter<Fact>
       _ => throw new JsonException($"Unknown Fact type: {name}")
     };
   }
-
   public override void Write(Utf8JsonWriter writer, Fact value, JsonSerializerOptions options)
   {
     JsonSerializer.Serialize(writer, (object)value, value.GetType(), options);
   }
 }
-
 public record HostFact(MachineInfo Machine, InterpreterInfo Interpreter, CommsLayerInfo? CommsLayer, RideInfo RIDE) : Fact(1, "Host");
 public record MachineInfo(string Name, string User, int PID, object Desc, int AccessLevel);
-
-
 public record InterpreterInfo(
     string Version,
     int BitWidth,
@@ -117,10 +109,7 @@ public record InterpreterInfo(
     [property: JsonConverter(typeof(HMonBooleanConverter))] bool IsRuntime,
     string? SessionUUID
 );
-
 public record CommsLayerInfo(string? Version, string? Address, int Port4, int Port6);
-
-
 public record RideInfo(
     [property: JsonConverter(typeof(HMonBooleanConverter))] bool Listening,
     [property: JsonConverter(typeof(HMonBooleanConverter))] bool? HTTPServer,
@@ -129,7 +118,6 @@ public record RideInfo(
     int? Port4,
     int? Port6
 );
-
 public record AccountInformationFact(int UserIdentification, long ComputeTime, long ConnectTime, long KeyingTime) : Fact(2, "AccountInformation");
 public record WorkspaceFact(string WSID, long Available, long Used, long Compactions,
   long GarbageCollections, long GarbagePockets, long FreePockets, long UsedPockets,
@@ -173,10 +161,8 @@ public record ExceptionInfo(
     string? Message,
     [property: JsonConverter(typeof(OSErrorInfoJsonConverter))] OSErrorInfo? OSError
 );
-
 public record NotificationResponse(string? UID, EventInfo Event, long? Size, int? Tid, IEnumerable<StackInfo>? Stack, DmxInfo? DMX, ExceptionInfo? Exception);
 public record EventInfo(int ID, string Name);
-
 public record LastKnownStateResponse(
     string? UID,
     [property: JsonConverter(typeof(HmonTimestampConverter))] DateTime TS,
@@ -184,11 +170,9 @@ public record LastKnownStateResponse(
     LocationInfo? Location,
     [property: JsonPropertyName("WS FULL")] WsFullInfo? WsFull
 );
-
 public record ActivityInfo(int Code, [property: JsonConverter(typeof(HmonTimestampConverter))] DateTime TS);
 public record LocationInfo(string Function, int Line, [property: JsonConverter(typeof(HmonTimestampConverter))] DateTime TS);
 public record WsFullInfo([property: JsonConverter(typeof(HmonTimestampConverter))] DateTime TS);
-
 public class HmonTimestampConverter : JsonConverter<DateTime>
 {
   private const string Format = "yyyyMMdd'T'HHmmss.fff'Z'";
@@ -199,29 +183,23 @@ public class HmonTimestampConverter : JsonConverter<DateTime>
       ? throw new JsonException("Timestamp string is null")
       : DateTime.ParseExact(str, Format, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
   }
-
   public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
   {
     writer.WriteStringValue(value.ToUniversalTime().ToString(Format, CultureInfo.InvariantCulture));
   }
 }
-
 public record SubscribedResponse(string? UID, IEnumerable<SubscriptionStatus> Events);
 public record SubscriptionStatus(int ID, string Name, int Value)
 {
   public SubscriptionEvent EventEnum => (SubscriptionEvent)ID;
 }
-
 public record RideConnectionResponse(string? UID, bool Restricted, bool? Connect, int? Status);
-
 public record UserMessageResponse(string? UID, JsonElement Message);
-
 public record UnknownCommandResponse(string? UID, string Name);
 public record MalformedCommandResponse(string? UID, string Name);
 public record InvalidSyntaxResponse();
 public record DisallowedUidResponse(string? UID, string Name);
 public record InternalLocationInfo(string File, int Line);
-
 public class InternalLocationInfoConverter : JsonConverter<InternalLocationInfo?>
 {
   public override InternalLocationInfo? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -247,10 +225,8 @@ public class InternalLocationInfoConverter : JsonConverter<InternalLocationInfo?
     writer.WriteEndArray();
   }
 }
-
 // OSErrorInfo: represents a 3-element tuple (int, int, string) from protocol
 public record OSErrorInfo(int Source, int Code, string Description);
-
 public class OSErrorInfoJsonConverter : JsonConverter<OSErrorInfo?>
 {
   public override OSErrorInfo? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -281,4 +257,3 @@ public class OSErrorInfoJsonConverter : JsonConverter<OSErrorInfo?>
     writer.WriteEndArray();
   }
 }
-
