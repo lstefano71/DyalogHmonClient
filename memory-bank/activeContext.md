@@ -1,18 +1,19 @@
 # Active Context: HMON-to-OTEL Adapter
 
-_Last reviewed: 2025-07-17 17:50 CEST_
+_Last reviewed: 2025-07-18 17:29 CEST_
 
 ## Current Focus
-- Project focus is on hmon-to-otel-adapter.
-- Adapter design and implementation to translate HMON events and metrics to OpenTelemetry format.
-- Feature Brief #2 (typed, specific exceptions for error handling) implemented.
+- Project focus is on hmon-to-otel-adapter and core client library.
+- Unified event stream is now the sole API for HmonOrchestrator; all obsolete event-based APIs have been removed.
+- Documentation and API guide updated to reflect the new event stream model.
 - Preferences for logging (Serilog), CLI (SpectreConsole), and embedded database (SQLite) remain unchanged.
 
 ## Next Steps
-- Implement adapter logic for HMON-to-OTEL translation.
+- Continue adapter logic for HMON-to-OTEL translation.
+- Ensure all client code and integrations use the unified event stream.
 - Thoroughly test handshake, interaction API, and connection reliability, including error/failure scenarios.
-- Write and run unit/integration tests for new error handling.
-- Update documentation as needed.
+- Write and run unit/integration tests for new event stream logic.
+- Review and update documentation as needed.
 
 ## Previous Focus
 - Feature Brief #4: Configurable, per-command timeouts for orchestrator implemented and documented.
@@ -29,8 +30,8 @@ _Last reviewed: 2025-07-17 17:50 CEST_
 - Unit and integration tests for core logic and orchestrator API.
 
 ## Recent Changes
-- Feature Brief #4: Configurable, per-command timeouts implemented in HmonOrchestrator and archived; documentation and todo list updated.
-- Feature Brief #2: Typed, specific exceptions for error handling implemented and documented.
-- docs/improvements/todo.md updated to mark Feature Brief #2 as complete.
+- ADR #1: Refactored HmonOrchestrator to use a single, unified event stream; all obsolete events and UI hooks removed.
+- Documentation (docs/hmonclient-api-guide.md) updated to reflect unified event stream and removal of obsolete APIs.
+- docs/improvements/todo.md updated to mark ADR #1 as complete.
 - Memory bank and TODOs reviewed and updated.
 - Project context and requirements confirmed.
