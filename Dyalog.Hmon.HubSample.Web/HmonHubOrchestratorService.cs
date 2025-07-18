@@ -154,5 +154,6 @@ public class HmonHubOrchestratorService(HubSampleConfig config, FactAggregator a
   {
     _cts.Cancel();
     await _orchestrator.DisposeAsync();
+    GC.SuppressFinalize(this);
   }
 }

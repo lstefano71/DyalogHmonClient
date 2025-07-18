@@ -58,6 +58,7 @@ public record InvalidSyntaxEvent(Guid SessionId, InvalidSyntaxResponse Error) : 
 public record DisallowedUidEvent(Guid SessionId, DisallowedUidResponse Error) : HmonEvent(SessionId);
 // Payloads
 public record FactsResponse(string? UID, int? Interval, IEnumerable<Fact> Facts);
+
 public abstract record Fact(int ID, string Name)
 {
   public FactType FactType => (FactType)ID;

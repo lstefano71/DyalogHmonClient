@@ -144,7 +144,7 @@ internal class HmonConnection : IAsyncDisposable
   private static readonly JsonSerializerOptions CachedJsonSerializerOptions = new() {
     Converters = { new FactJsonConverter() }
   };
-  // Update the code to use the cached JsonSerializerOptions instance
+  
   /// <summary>
   /// Parses a protocol message and dispatches the corresponding HMON event.
   /// </summary>
@@ -162,21 +162,21 @@ internal class HmonConnection : IAsyncDisposable
     HmonEvent? hmonEvent =
         command switch {
           "Facts" => new FactsReceivedEvent(
-                _sessionId,
-                JsonSerializer.Deserialize<FactsResponse>(
-                    ref reader,
-                    CachedJsonSerializerOptions // Use cached options here
-                )!
-            ),
-          "Notification" => new NotificationReceivedEvent(_sessionId, JsonSerializer.Deserialize<NotificationResponse>(ref reader, HmonJsonContext.Default.NotificationResponse)!),
-          "LastKnownState" => new LastKnownStateReceivedEvent(_sessionId, JsonSerializer.Deserialize<LastKnownStateResponse>(ref reader, HmonJsonContext.Default.LastKnownStateResponse)!),
-          "Subscribed" => new SubscribedResponseReceivedEvent(_sessionId, JsonSerializer.Deserialize<SubscribedResponse>(ref reader, HmonJsonContext.Default.SubscribedResponse)!),
-          "RideConnection" => new RideConnectionReceivedEvent(_sessionId, JsonSerializer.Deserialize<RideConnectionResponse>(ref reader, HmonJsonContext.Default.RideConnectionResponse)!),
-          "UserMessage" => new UserMessageReceivedEvent(_sessionId, JsonSerializer.Deserialize<UserMessageResponse>(ref reader, HmonJsonContext.Default.UserMessageResponse)!),
-          "UnknownCommand" => new UnknownCommandEvent(_sessionId, JsonSerializer.Deserialize<UnknownCommandResponse>(ref reader, HmonJsonContext.Default.UnknownCommandResponse)!),
-          "MalformedCommand" => new MalformedCommandEvent(_sessionId, JsonSerializer.Deserialize<MalformedCommandResponse>(ref reader, HmonJsonContext.Default.MalformedCommandResponse)!),
-          "InvalidSyntax" => new InvalidSyntaxEvent(_sessionId, JsonSerializer.Deserialize<InvalidSyntaxResponse>(ref reader, HmonJsonContext.Default.InvalidSyntaxResponse)!),
-          "DisallowedUID" => new DisallowedUidEvent(_sessionId, JsonSerializer.Deserialize<DisallowedUidResponse>(ref reader, HmonJsonContext.Default.DisallowedUidResponse)!),
+                 _sessionId,
+                 JsonSerializer.Deserialize<FactsResponse>(
+                     ref reader,
+                     CachedJsonSerializerOptions // Use cached options here
+                 )!
+             ),
+          "Notification" => new NotificationReceivedEvent(_sessionId, JsonSerializer.Deserialize(ref reader, HmonJsonContext.Default.NotificationResponse)!),
+          "LastKnownState" => new LastKnownStateReceivedEvent(_sessionId, JsonSerializer.Deserialize(ref reader, HmonJsonContext.Default.LastKnownStateResponse)!),
+          "Subscribed" => new SubscribedResponseReceivedEvent(_sessionId, JsonSerializer.Deserialize(ref reader, HmonJsonContext.Default.SubscribedResponse)!),
+          "RideConnection" => new RideConnectionReceivedEvent(_sessionId, JsonSerializer.Deserialize(ref reader, HmonJsonContext.Default.RideConnectionResponse)!),
+          "UserMessage" => new UserMessageReceivedEvent(_sessionId, JsonSerializer.Deserialize(ref reader, HmonJsonContext.Default.UserMessageResponse)!),
+          "UnknownCommand" => new UnknownCommandEvent(_sessionId, JsonSerializer.Deserialize(ref reader, HmonJsonContext.Default.UnknownCommandResponse)!),
+          "MalformedCommand" => new MalformedCommandEvent(_sessionId, JsonSerializer.Deserialize(ref reader, HmonJsonContext.Default.MalformedCommandResponse)!),
+          "InvalidSyntax" => new InvalidSyntaxEvent(_sessionId, JsonSerializer.Deserialize(ref reader, HmonJsonContext.Default.InvalidSyntaxResponse)!),
+          "DisallowedUID" => new DisallowedUidEvent(_sessionId, JsonSerializer.Deserialize(ref reader, HmonJsonContext.Default.DisallowedUidResponse)!),
           _ => null
         };
     if (hmonEvent != null) {

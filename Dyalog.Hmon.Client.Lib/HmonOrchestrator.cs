@@ -331,6 +331,7 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
     } else {
       Log.Verbose("Orchestrator: Disposal complete.");
     }
+    GC.SuppressFinalize(this);
   }
   /// <summary>
   /// Gets the latest fact of type T for a session.

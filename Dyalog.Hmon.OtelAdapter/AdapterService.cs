@@ -437,5 +437,6 @@ public class AdapterService : BackgroundService, IAsyncDisposable
       await _orchestrator.DisposeAsync();
     _meter?.Dispose();
     _telemetryFactory?.MeterProvider?.Dispose();
+    GC.SuppressFinalize(this);
   }
 }
