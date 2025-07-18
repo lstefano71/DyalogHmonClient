@@ -1,5 +1,6 @@
 using Dyalog.Hmon.Client.Lib;
 
+using Serilog;
 namespace Dyalog.Hmon.HubSample.Web;
 
 public class HmonHubOrchestratorService : IAsyncDisposable
@@ -23,11 +24,10 @@ public class HmonHubOrchestratorService : IAsyncDisposable
         { "suspendedthreads", FactType.SuspendedThreads },
         { "threadcount", FactType.ThreadCount }
     };
-
   public HmonHubOrchestratorService(HubSampleConfig config, FactAggregator aggregator, WebSocketHub? wsHub = null)
   {
     _aggregator = aggregator;
-    _servers = config.HmonServers;
+    _servers = config.HmonServers ?? [];
     _wsHub = wsHub;
     _pollListener = config.PollListener;
     _pollFactTypes = config.PollFacts?
@@ -37,91 +37,98 @@ public class HmonHubOrchestratorService : IAsyncDisposable
         .ToList() ?? [FactType.Host, FactType.Threads];
     _pollIntervalSeconds = config.PollIntervalSeconds ?? 5;
     _historySize = config.EventHistorySize ?? 10;
-
     // Map string event names to SubscriptionEvent enum
     _eventEnums = config.EventSubscription?
         .Select(name => Enum.TryParse<SubscriptionEvent>(name, ignoreCase: true, out var ev) ? ev : (SubscriptionEvent?)null)
         .Where(ev => ev.HasValue)
         .Select(ev => ev!.Value)
         .ToList() ?? [SubscriptionEvent.UntrappedSignal];
-
     _orchestrator = new HmonOrchestrator(new HmonOrchestratorOptions {
       // Add options as needed (e.g., retry policy)
     });
-
-    // Subscribe to client connected event for both SERVE and POLL
-    _orchestrator.ClientConnected += async args => {
-      try {
-        await _orchestrator.SubscribeAsync(args.SessionId, _eventEnums);
-
-        await _orchestrator.PollFactsAsync(args.SessionId, _pollFactTypes, TimeSpan.FromSeconds(_pollIntervalSeconds));
-      } catch (Exception ex) {
-        Serilog.Log.Logger.Error(ex, "Failed to start polling facts for session {SessionId}", args.SessionId);
-      }
-    };
+    // REMOVED: The ClientConnected event handler is no longer needed here.
   }
-
-  public async Task StartAsync()
+  public Task StartAsync()
   {
     // Start listener if pollListener is configured
     if (_pollListener is not null) {
       _ = _orchestrator.StartListenerAsync(_pollListener.Ip, _pollListener.Port, _cts.Token);
     }
-
     // Connect to all configured servers
     if (_servers != null) {
       foreach (var server in _servers) {
         _orchestrator.AddServer(server.Host, server.Port, server.Name);
       }
     }
-
-    // Start event loop for unified event stream
+    // Start the single, unified event processing loop
     _ = Task.Run(async () => {
       await foreach (var evt in _orchestrator.Events.WithCancellation(_cts.Token)) {
-        if (evt is FactsReceivedEvent factsEvent) {
-          foreach (var fact in factsEvent.Facts.Facts) {
-            _aggregator.UpdateFact(
-                factsEvent.SessionId.ToString(),
-                factsEvent.SessionId,
-                fact.Name,
-                fact
+        var serverName = (evt as SessionConnectedEvent)?.FriendlyName ?? (evt as SessionDisconnectedEvent)?.FriendlyName ?? evt.SessionId.ToString();
+
+        switch (evt) {
+          case SessionConnectedEvent connected:
+            Log.Information("Hub session connected: {SessionId} ({FriendlyName}) from {Host}:{Port}",
+                connected.SessionId, connected.FriendlyName, connected.Host, connected.Port);
+            try {
+              await _orchestrator.SubscribeAsync(connected.SessionId, _eventEnums);
+              await _orchestrator.PollFactsAsync(connected.SessionId, _pollFactTypes, TimeSpan.FromSeconds(_pollIntervalSeconds));
+            } catch (Exception ex) {
+              Log.Error(ex, "Failed to start polling facts for session {SessionId}", connected.SessionId);
+            }
+            break;
+
+          case SessionDisconnectedEvent disconnected:
+            Log.Information("Hub session disconnected: {SessionId} ({FriendlyName}). Reason: {Reason}",
+                disconnected.SessionId, disconnected.FriendlyName, disconnected.Reason);
+            _aggregator.RemoveSession(serverName, disconnected.SessionId);
+            // Optionally broadcast a disconnect event to WebSocket clients
+            _wsHub?.BroadcastSessionStatusUpdate(serverName, disconnected.SessionId, "Disconnected", disconnected.Reason);
+            break;
+
+          case FactsReceivedEvent factsEvent:
+            foreach (var fact in factsEvent.Facts.Facts) {
+              _aggregator.UpdateFact(
+                  serverName,
+                  factsEvent.SessionId,
+                  fact.Name,
+                  fact
+              );
+              _wsHub?.BroadcastFactUpdate(new FactRecord(
+                  serverName,
+                  factsEvent.SessionId,
+                  fact.Name,
+                  fact,
+                  DateTimeOffset.UtcNow
+              ));
+            }
+            break;
+
+          case NotificationReceivedEvent notificationEvent:
+            var eventName = notificationEvent.Notification.Event.Name;
+            var payload = notificationEvent.Notification;
+            var timestamp = DateTimeOffset.UtcNow;
+            _aggregator.AddEvent(
+                serverName: serverName,
+                sessionId: notificationEvent.SessionId,
+                eventName: eventName,
+                payload: payload,
+                timestamp: timestamp
             );
-            _wsHub?.BroadcastFactUpdate(new FactRecord(
-                factsEvent.SessionId.ToString(),
-                factsEvent.SessionId,
-                fact.Name,
-                fact,
-                DateTimeOffset.UtcNow
-            ));
-          }
-        } else if (evt is NotificationReceivedEvent notificationEvent) {
-          var sessionId = notificationEvent.SessionId;
-          var eventName = notificationEvent.Notification.Event.Name;
-          var payload = notificationEvent.Notification;
-          var timestamp = DateTimeOffset.UtcNow;
-
-          _aggregator.AddEvent(
-              serverName: sessionId.ToString(),
-              sessionId: sessionId,
-              eventName: eventName,
-              payload: payload,
-              timestamp: timestamp
-          );
-
-          // Immediately send event through websocket
-          _wsHub?.BroadcastEvent(
-              serverName: sessionId.ToString(),
-              sessionId: sessionId,
-              eventName: eventName,
-              payload: payload,
-              timestamp: timestamp
-          );
+            // Immediately send event through websocket
+            _wsHub?.BroadcastEvent(
+                serverName: serverName,
+                sessionId: notificationEvent.SessionId,
+                eventName: eventName,
+                payload: payload,
+                timestamp: timestamp
+            );
+            break;
         }
-        // Optionally handle disconnects, errors, etc.
       }
     }, _cts.Token);
-  }
 
+    return Task.CompletedTask;
+  }
   public async ValueTask DisposeAsync()
   {
     _cts.Cancel();

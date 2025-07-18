@@ -10,11 +10,8 @@ using Spectre.Console;
 
 using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
-
 namespace Dyalog.Hmon.OtelAdapter;
-
 using System.Collections.Generic;
-
 /// <summary>
 /// Background service that connects to HMON servers, polls for facts and events,
 /// and translates them into OpenTelemetry metrics and logs for observability.
@@ -78,7 +75,6 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     /// <summary>Tags for OTEL metrics and logs.</summary>
     public KeyValuePair<string, object?>[]? Tags;
   }
-
   /// <summary>
   /// Initializes a new instance of the <see cref="AdapterService"/> class with the specified adapter configuration.
   /// Sets up OpenTelemetry metrics, logging, and prepares session metric tracking.
@@ -88,12 +84,10 @@ public class AdapterService : BackgroundService, IAsyncDisposable
   {
     _adapterConfig = adapterConfig;
     _meter = new Meter(_adapterConfig.MeterName);
-
     Serilog.Sinks.OpenTelemetry.OtlpProtocol protocol = Serilog.Sinks.OpenTelemetry.OtlpProtocol.Grpc;
     if (!string.IsNullOrWhiteSpace(_adapterConfig.OtelExporter.Protocol)) {
       System.Enum.TryParse(_adapterConfig.OtelExporter.Protocol, true, out protocol);
     }
-
     _otelLoggerFactory = LoggerFactory.Create(builder => {
       builder.AddSerilog(new LoggerConfiguration()
         .WriteTo.OpenTelemetry(
@@ -102,7 +96,6 @@ public class AdapterService : BackgroundService, IAsyncDisposable
         .CreateLogger());
     });
     _otelLogger = _otelLoggerFactory.CreateLogger("HmonToOtel");
-
     // ObservableGauge for each metric, emits per-session measurements with tags
     _meter.CreateObservableGauge("dyalog.workspace.memory.available", () =>
       _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.WorkspaceMemoryAvailable, sm.Tags ?? [])), "Workspace Memory Available");
@@ -137,7 +130,6 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     _meter.CreateObservableGauge("dyalog.threads.suspended", () =>
       _sessionMetrics.Values.Select(sm => new Measurement<long>(sm.ThreadsSuspended, sm.Tags ?? [])), "Suspended Thread Count");
   }
-
   /// <summary>
   /// Main execution loop for the background service.
   /// Connects to HMON servers, subscribes to events, and processes incoming data.
@@ -147,10 +139,8 @@ public class AdapterService : BackgroundService, IAsyncDisposable
   {
     Log.Information("AdapterService started.");
     AnsiConsole.MarkupLine("[bold blue]AdapterService running.[/]");
-
     Log.Debug("Loaded configuration: {@AdapterConfig}", _adapterConfig);
     Log.Information("OTLP Endpoint: {Endpoint}", _adapterConfig.OtelExporter?.Endpoint ?? "(null)");
-
     _orchestrator = new HmonOrchestrator();
     _telemetryFactory = new TelemetryFactory(_adapterConfig);
 
@@ -164,116 +154,61 @@ public class AdapterService : BackgroundService, IAsyncDisposable
       }
     }
 
-    _orchestrator.ClientConnected += async args => {
-      _otelLogger.LogInformation("Session started {session.id} {net.peer.name} {net.peer.port}",
-        args.SessionId, args.Host, args.Port);
-
-      var pollingInterval = TimeSpan.FromMilliseconds(_adapterConfig?.PollingIntervalMs ?? 5000);
-      // WARNING: (DO NOT DELETE!) if the facts supported by the HMON server change, this list must be updated accordingly.
-      FactType[] facts = [
-        FactType.Host,
-        FactType.AccountInformation,
-        FactType.Workspace,
-        FactType.Threads,
-        FactType.SuspendedThreads,
-        FactType.ThreadCount
-      ];
-      await _orchestrator.PollFactsAsync(args.SessionId, facts, pollingInterval);
-      Log.Information("Started polling for FactTypes: {FactTypes} on session {SessionId} with interval {Interval}ms",
-        facts, args.SessionId, pollingInterval.TotalMilliseconds);
-      
-      await _orchestrator.SubscribeAsync(args.SessionId, _adapterConfig.EventsToSubcribeTo);
-      Log.Information("Subscribed to events on session {SessionId}: {Events}", args.SessionId, _adapterConfig.EventsToSubcribeTo);
-    };
-
+    // Add SERVE-mode servers
     foreach (var server in _adapterConfig.HmonServers) {
-      try {
-        _orchestrator.AddServer(server.Host, server.Port, server.Name);
-        Log.Information("Added HMON server: {Host}:{Port} ({Name})", server.Host, server.Port, server.Name ?? "");
-      } catch (Exception ex) {
-        _otelLogger.LogError(ex,
-          "Failed to connect to HMON server {event.name} {net.peer.name} {net.peer.port}",
-          "ConnectionFailed",
-          server.Host,
-          server.Port
-        );
-
-        Log.Error(ex,
-          "Failed to connect to HMON server {event.name} {net.peer.name} {net.peer.port}",
-          "ConnectionFailed",
-          server.Host,
-          server.Port
-        );
-      }
+      _orchestrator.AddServer(server.Host, server.Port, server.Name);
+      Log.Information("Added HMON server for connection: {Host}:{Port} ({Name})", server.Host, server.Port, server.Name ?? "");
     }
 
-    _orchestrator.ClientDisconnected += async args => {
-      var logAttributes = new Dictionary<string, object> {
-        ["event.name"] = "ClientDisconnected",
-        ["net.peer.name"] = args.Host,
-        ["net.peer.port"] = args.Port,
-        ["error.message"] = args.Reason,
-        ["service.name"] = _adapterConfig.ServiceName,
-        ["session.id"] = args.SessionId
-      };
-      _otelLogger.LogError("HMON client disconnected {event.name} {net.peer.name} {net.peer.port} {error.message} {service.name} {session.id}",
-        "ClientDisconnected",
-        args.Host,
-        args.Port,
-        args.Reason,
-        _adapterConfig.ServiceName,
-        args.SessionId
-      );
-
-      Log.Error("HMON client disconnected {event.name} {net.peer.name} {net.peer.port} {error.message} {service.name} {session.id}",
-        "ClientDisconnected",
-        args.Host,
-        args.Port,
-        args.Reason,
-        _adapterConfig.ServiceName,
-        args.SessionId
-      );
-
-      // Remove session metrics to prevent memory leak and stale data
-      _sessionMetrics.TryRemove(args.SessionId.ToString(), out _);
-
-      await Task.CompletedTask;
-    };
-
-    await ProcessEventsAsync(stoppingToken);
-    Log.Information("AdapterService stopping.");
-  }
-
-  /// <summary>
-  /// Processes incoming HMON events and dispatches them to the appropriate handlers.
-  /// </summary>
-  /// <param name="stoppingToken">Cancellation token for graceful shutdown.</param>
-  private async Task ProcessEventsAsync(CancellationToken stoppingToken)
-  {
+    // Main unified event processing loop
     try {
       await foreach (var hmonEvent in _orchestrator.Events.WithCancellation(stoppingToken)) {
-        switch (hmonEvent) {
-          case FactsReceivedEvent factsEvent:
-            HandleFactsReceivedEvent(factsEvent);
-            break;
-          case NotificationReceivedEvent notificationEvent:
-            await HandleNotificationReceivedEventAsync(notificationEvent, stoppingToken);
-            break;
-          case UserMessageReceivedEvent userMsgEvent:
-            HandleUserMessageReceivedEvent(userMsgEvent);
-            break;
-          default:
-            HandleUnknownEvent(hmonEvent);
-            break;
+        try {
+          switch (hmonEvent) {
+            case SessionConnectedEvent connected:
+              _otelLogger.LogInformation("Session started {SessionId} from {Host}:{Port}", connected.SessionId, connected.Host, connected.Port);
+              var pollingInterval = TimeSpan.FromMilliseconds(_adapterConfig.PollingIntervalMs);
+              FactType[] factsToPoll = [FactType.Host, FactType.AccountInformation, FactType.Workspace, FactType.Threads, FactType.SuspendedThreads, FactType.ThreadCount];
+              await _orchestrator.PollFactsAsync(connected.SessionId, factsToPoll, pollingInterval, stoppingToken);
+              Log.Information("Started polling facts for session {SessionId}", connected.SessionId);
+              SubscriptionEvent[] eventsToSubscribe = [SubscriptionEvent.All];
+              await _orchestrator.SubscribeAsync(connected.SessionId, eventsToSubscribe, stoppingToken);
+              Log.Information("Subscribed to all events for session {SessionId}", connected.SessionId);
+              break;
+
+            case SessionDisconnectedEvent disconnected:
+              _otelLogger.LogError("HMON client disconnected {SessionId}. Reason: {Reason}", disconnected.SessionId, disconnected.Reason);
+              _sessionMetrics.TryRemove(disconnected.SessionId.ToString(), out _);
+              break;
+
+            case FactsReceivedEvent factsEvent:
+              HandleFactsReceivedEvent(factsEvent);
+              break;
+
+            case NotificationReceivedEvent notificationEvent:
+              await HandleNotificationReceivedEventAsync(notificationEvent, stoppingToken);
+              break;
+
+            case UserMessageReceivedEvent userMsgEvent:
+              HandleUserMessageReceivedEvent(userMsgEvent);
+              break;
+
+            default:
+              HandleUnknownEvent(hmonEvent);
+              break;
+          }
+        } catch (Exception ex) {
+          Log.Error(ex, "Error processing HMON event for session {SessionId}.", hmonEvent.SessionId);
         }
       }
     } catch (OperationCanceledException) {
       Log.Information("Event processing loop canceled.");
     } catch (Exception ex) {
-      Log.Error(ex, "Unhandled exception in main event processing loop");
+      Log.Error(ex, "Unhandled exception in main event processing loop.");
     }
-  }
 
+    Log.Information("AdapterService stopping.");
+  }
   /// <summary>
   /// Handles received facts from the HMON server, mapping them to session metrics and OTEL attributes.
   /// </summary>
@@ -370,7 +305,6 @@ public class AdapterService : BackgroundService, IAsyncDisposable
       }
     }
   }
-
   /// <summary>
   /// Handles notification events from the HMON server, enriching logs with event-specific context.
   /// </summary>
@@ -384,9 +318,7 @@ public class AdapterService : BackgroundService, IAsyncDisposable
       ["session.id"] = sessionId.ToString(),
       ["notification.uid"] = notificationEvent.Notification.UID
     };
-
     MergeSessionTagsIntoAttributes(sessionId.ToString(), logAttributes);
-
     switch (notificationEvent.Notification.Event.Name) {
       case "UntrappedSignal":
       case "TrappedSignal":
@@ -427,7 +359,6 @@ public class AdapterService : BackgroundService, IAsyncDisposable
         break;
     }
   }
-
   /// <summary>
   /// Handles user message events from the HMON server and logs them with context.
   /// </summary>
@@ -440,14 +371,11 @@ public class AdapterService : BackgroundService, IAsyncDisposable
       ["session.id"] = sessionId,
       ["user_message.uid"] = userMsgEvent.Message?.UID
     };
-
     MergeSessionTagsIntoAttributes(sessionId, logAttributes);
-
     _otelLogger.LogInformationWithContext(logAttributes, "{event.name} received: {user_message}",
       "UserMessageReceived",
       userMsgEvent.Message?.Message.GetRawText());
   }
-
   /// <summary>
   /// Merges session-level tags into the provided log attribute dictionary for enriched logging.
   /// </summary>
@@ -462,7 +390,6 @@ public class AdapterService : BackgroundService, IAsyncDisposable
       }
     }
   }
-
   /// <summary>
   /// Handles unknown or unrecognized HMON events, logging them for diagnostics.
   /// </summary>
@@ -471,16 +398,13 @@ public class AdapterService : BackgroundService, IAsyncDisposable
   {
     var eventType = hmonEvent?.GetType().Name ?? "*unknown*";
     Log.Warning("Received unknown HMON event type: {EventType} {@Event}", eventType, hmonEvent);
-
     var logAttributes = new Dictionary<string, object> {
       ["service.name"] = _adapterConfig.ServiceName,
       ["event.type"] = eventType,
       ["event.payload"] = hmonEvent?.ToString() ?? "(null)"
     };
-
     _otelLogger.LogWarning("Unknown HMON event received {event.type} {event.payload}", eventType, hmonEvent?.ToString() ?? "(null)");
   }
-
   /// <summary>
   /// Disposes resources used by the AdapterService, including orchestrator and telemetry providers.
   /// </summary>
@@ -490,7 +414,6 @@ public class AdapterService : BackgroundService, IAsyncDisposable
     if (_orchestrator is not null)
       await _orchestrator.DisposeAsync();
     _meter?.Dispose();
-
     _telemetryFactory?.MeterProvider?.Dispose();
   }
 }
