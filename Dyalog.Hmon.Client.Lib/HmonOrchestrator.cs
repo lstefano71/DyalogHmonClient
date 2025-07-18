@@ -27,21 +27,18 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   // Internal: watches event stream and updates fact cache
   private async IAsyncEnumerable<HmonEvent> WatchAndCacheFacts([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
   {
-    await foreach (var evt in _eventChannel.Reader.ReadAllAsync(ct))
-    {
-        if (evt is FactsReceivedEvent factsEvt)
-        {
-            foreach (var fact in factsEvt.Facts.Facts)
-            {
-                if (fact != null)
-                {
-                    _factCache[(evt.SessionId, fact.GetType())] = new FactCacheEntry(fact, DateTimeOffset.UtcNow);
-                }
-            }
+    Log.Verbose($"WatchAndCacheFacts: Enumeration started. Token: {ct.GetHashCode()}");
+    await foreach (var evt in _eventChannel.Reader.ReadAllAsync(ct)) {
+      if (evt is FactsReceivedEvent factsEvt) {
+        foreach (var fact in factsEvt.Facts.Facts) {
+          if (fact != null) {
+            _factCache[(evt.SessionId, fact.GetType())] = new FactCacheEntry(fact, DateTimeOffset.UtcNow);
+          }
         }
-        yield return evt;
+      }
+      yield return evt;
     }
-    Log.Information("WatchAndCacheFacts: Exiting after cancellation or completion.");
+    Log.Verbose("WatchAndCacheFacts: Exiting after cancellation or completion.");
   }
   /// <summary>
   /// Event fired when an error or diagnostic event occurs.
@@ -297,41 +294,42 @@ public class HmonOrchestrator(HmonOrchestratorOptions? options = null) : IAsyncD
   /// </summary>
   public async ValueTask DisposeAsync()
   {
-    Log.Information("Orchestrator: Starting disposal...");
-    if (Interlocked.Exchange(ref _disposeCalled, 1) != 0)
-    {
-        Log.Information("Orchestrator: Already disposed.");
-        return;
+    Log.Verbose("Orchestrator: Starting disposal...");
+    if (Interlocked.Exchange(ref _disposeCalled, 1) != 0) {
+      Log.Verbose("Orchestrator: Already disposed.");
+      return;
     }
-    Log.Information("Orchestrator: Disposing servers...");
-    foreach (var server in _servers.Values)
-    {
-        Log.Information($"Orchestrator: Disposing server {server}");
-        await server.DisposeAsync();
+    Log.Verbose("Orchestrator: Disposing servers...");
+    foreach (var server in _servers.Values) {
+      Log.Verbose($"Orchestrator: Disposing server {server}");
+      await server.DisposeAsync();
     }
-    Log.Information("Orchestrator: Servers disposed.");
+    Log.Verbose("Orchestrator: Servers disposed.");
     _servers.Clear();
 
-    Log.Information("Orchestrator: Disposing connections...");
-    foreach (var connection in _connections.Values)
-    {
-        Log.Information($"Orchestrator: Disposing connection {connection}");
-        await connection.DisposeAsync();
+    Log.Verbose("Orchestrator: Disposing connections...");
+    foreach (var connection in _connections.Values) {
+      Log.Verbose($"Orchestrator: Disposing connection {connection}");
+      await connection.DisposeAsync();
     }
-    Log.Information("Orchestrator: Connections disposed.");
+    Log.Verbose("Orchestrator: Connections disposed.");
     _connections.Clear();
 
-    Log.Information("Orchestrator: Completing event channel...");
+    Log.Verbose("Orchestrator: Completing event channel...");
     _eventChannel.Writer.Complete();
-    Log.Information("Orchestrator: Awaiting channel completion...");
-    var completionTask = _eventChannel.Reader.Completion;
-    if (await Task.WhenAny(completionTask, Task.Delay(TimeSpan.FromSeconds(10))) != completionTask)
-    {
-        Log.Warning("Orchestrator: Channel completion timed out.");
+    Log.Verbose("Orchestrator: Draining event channel after completion...");
+    while (await _eventChannel.Reader.WaitToReadAsync()) {
+      while (_eventChannel.Reader.TryRead(out var test)) {
+        Log.Verbose("message drained: {Message}", test);
+      }
     }
-    else
-    {
-        Log.Information("Orchestrator: Disposal complete.");
+    Log.Verbose("Orchestrator: Event channel drained.");
+    Log.Verbose("Orchestrator: Awaiting channel completion...");
+    var completionTask = _eventChannel.Reader.Completion;
+    if (await Task.WhenAny(completionTask, Task.Delay(TimeSpan.FromSeconds(10))) != completionTask) {
+      Log.Warning("Orchestrator: Channel completion timed out.");
+    } else {
+      Log.Verbose("Orchestrator: Disposal complete.");
     }
   }
   /// <summary>

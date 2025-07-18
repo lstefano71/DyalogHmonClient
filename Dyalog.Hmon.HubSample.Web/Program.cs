@@ -56,11 +56,11 @@ app.Urls.Add($"http://{apiConfig.Ip}:{apiConfig.Port}");
 
 // Register orchestrator disposal on shutdown with timeout
 app.Lifetime.ApplicationStopping.Register(() => {
-    Log.Information("Disposing orchestrator on shutdown...");
-    var disposeTask = orchestratorService.DisposeAsync().AsTask();
-    if (!disposeTask.Wait(TimeSpan.FromSeconds(10))) {
-        Log.Warning("Orchestrator disposal timed out. Forcing shutdown.");
-    }
+  Log.Information("Disposing orchestrator on shutdown...");
+  var disposeTask = orchestratorService.DisposeAsync().AsTask();
+  if (!disposeTask.Wait(TimeSpan.FromSeconds(10))) {
+    Log.Warning("Orchestrator disposal timed out. Forcing shutdown.");
+  }
 });
 
 if (config.AutoShutdownSeconds is int seconds && seconds > 0) {
