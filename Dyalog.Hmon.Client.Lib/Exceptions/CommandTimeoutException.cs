@@ -2,13 +2,7 @@ namespace Dyalog.Hmon.Client.Lib.Exceptions;
 
 using System;
 
-public class CommandTimeoutException : HmonException
+public class CommandTimeoutException(string commandName, TimeSpan timeout) : HmonException($"The command '{commandName}' did not receive a response within the configured timeout of {timeout.TotalSeconds} seconds.")
 {
-    public string CommandName { get; }
-
-    public CommandTimeoutException(string commandName, TimeSpan timeout)
-        : base($"The command '{commandName}' did not receive a response within the configured timeout of {timeout.TotalSeconds} seconds.")
-    {
-        CommandName = commandName;
-    }
+  public string CommandName { get; } = commandName;
 }

@@ -1,5 +1,4 @@
 ﻿using Dyalog.Hmon.OtelAdapter;
-using Dyalog.Hmon.Client.Lib;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

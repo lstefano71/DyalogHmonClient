@@ -7,13 +7,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dyalog.Hmon.Client.Lib", "D
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dyalog.Hmon.Client.Console", "Dyalog.Hmon.Client.Console\Dyalog.Hmon.Client.Console.csproj", "{7AC9B60A-02E0-44C5-B8B8-0E36EF7B8A93}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dyalog.Hmon.Client.Tests", "Dyalog.Hmon.Client.Tests\Dyalog.Hmon.Client.Tests.csproj", "{0571EBC0-E99D-4E16-A08B-EED87B574C62}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dyalog.Hmon.HubSample.Web", "Dyalog.Hmon.HubSample.Web\Dyalog.Hmon.HubSample.Web.csproj", "{B8071369-D288-415C-8A5A-C76E7E8C0148}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dyalog.Hmon.OtelAdapter", "Dyalog.Hmon.OtelAdapter\Dyalog.Hmon.OtelAdapter.csproj", "{A3E053C6-3C06-4CC8-86B2-8812A3FB383A}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dyalog.Hmon.OtelAdapter.Tests", "Dyalog.Hmon.OtelAdapter.Tests\Dyalog.Hmon.OtelAdapter.Tests.csproj", "{E7A6B2B2-4B6B-4B6B-8B8B-0E36EF7B8A93}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -49,18 +45,6 @@ Global
 		{7AC9B60A-02E0-44C5-B8B8-0E36EF7B8A93}.Release|x64.Build.0 = Release|Any CPU
 		{7AC9B60A-02E0-44C5-B8B8-0E36EF7B8A93}.Release|x86.ActiveCfg = Release|Any CPU
 		{7AC9B60A-02E0-44C5-B8B8-0E36EF7B8A93}.Release|x86.Build.0 = Release|Any CPU
-		{0571EBC0-E99D-4E16-A08B-EED87B574C62}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{0571EBC0-E99D-4E16-A08B-EED87B574C62}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{0571EBC0-E99D-4E16-A08B-EED87B574C62}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{0571EBC0-E99D-4E16-A08B-EED87B574C62}.Debug|x64.Build.0 = Debug|Any CPU
-		{0571EBC0-E99D-4E16-A08B-EED87B574C62}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{0571EBC0-E99D-4E16-A08B-EED87B574C62}.Debug|x86.Build.0 = Debug|Any CPU
-		{0571EBC0-E99D-4E16-A08B-EED87B574C62}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{0571EBC0-E99D-4E16-A08B-EED87B574C62}.Release|Any CPU.Build.0 = Release|Any CPU
-		{0571EBC0-E99D-4E16-A08B-EED87B574C62}.Release|x64.ActiveCfg = Release|Any CPU
-		{0571EBC0-E99D-4E16-A08B-EED87B574C62}.Release|x64.Build.0 = Release|Any CPU
-		{0571EBC0-E99D-4E16-A08B-EED87B574C62}.Release|x86.ActiveCfg = Release|Any CPU
-		{0571EBC0-E99D-4E16-A08B-EED87B574C62}.Release|x86.Build.0 = Release|Any CPU
 		{B8071369-D288-415C-8A5A-C76E7E8C0148}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{B8071369-D288-415C-8A5A-C76E7E8C0148}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B8071369-D288-415C-8A5A-C76E7E8C0148}.Debug|x64.ActiveCfg = Debug|Any CPU
@@ -85,18 +69,6 @@ Global
 		{A3E053C6-3C06-4CC8-86B2-8812A3FB383A}.Release|x64.Build.0 = Release|Any CPU
 		{A3E053C6-3C06-4CC8-86B2-8812A3FB383A}.Release|x86.ActiveCfg = Release|Any CPU
 		{A3E053C6-3C06-4CC8-86B2-8812A3FB383A}.Release|x86.Build.0 = Release|Any CPU
-		{E7A6B2B2-4B6B-4B6B-8B8B-0E36EF7B8A93}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{E7A6B2B2-4B6B-4B6B-8B8B-0E36EF7B8A93}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{E7A6B2B2-4B6B-4B6B-8B8B-0E36EF7B8A93}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{E7A6B2B2-4B6B-4B6B-8B8B-0E36EF7B8A93}.Debug|x64.Build.0 = Debug|Any CPU
-		{E7A6B2B2-4B6B-4B6B-8B8B-0E36EF7B8A93}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{E7A6B2B2-4B6B-4B6B-8B8B-0E36EF7B8A93}.Debug|x86.Build.0 = Debug|Any CPU
-		{E7A6B2B2-4B6B-4B6B-8B8B-0E36EF7B8A93}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{E7A6B2B2-4B6B-4B6B-8B8B-0E36EF7B8A93}.Release|Any CPU.Build.0 = Release|Any CPU
-		{E7A6B2B2-4B6B-4B6B-8B8B-0E36EF7B8A93}.Release|x64.ActiveCfg = Release|Any CPU
-		{E7A6B2B2-4B6B-4B6B-8B8B-0E36EF7B8A93}.Release|x64.Build.0 = Release|Any CPU
-		{E7A6B2B2-4B6B-4B6B-8B8B-0E36EF7B8A93}.Release|x86.ActiveCfg = Release|Any CPU
-		{E7A6B2B2-4B6B-4B6B-8B8B-0E36EF7B8A93}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

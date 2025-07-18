@@ -2,13 +2,7 @@ namespace Dyalog.Hmon.Client.Lib.Exceptions;
 
 using System;
 
-public class SessionNotFoundException : HmonException
+public class SessionNotFoundException(Guid sessionId) : HmonException($"No active and connected session found for ID: {sessionId}")
 {
-    public Guid SessionId { get; }
-
-    public SessionNotFoundException(Guid sessionId)
-        : base($"No active and connected session found for ID: {sessionId}")
-    {
-        SessionId = sessionId;
-    }
+  public Guid SessionId { get; } = sessionId;
 }

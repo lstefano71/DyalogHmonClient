@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
@@ -8,7 +8,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Dyalog.Hmon.OtelAdapter\Dyalog.Hmon.OtelAdapter.csproj" />
     <ProjectReference Include="..\Dyalog.Hmon.Client.Lib\Dyalog.Hmon.Client.Lib.csproj" />
-    <ProjectReference Include="..\Dyalog.Hmon.Client.Tests\Dyalog.Hmon.Client.Tests.csproj" />
   </ItemGroup>
 
   <ItemGroup>

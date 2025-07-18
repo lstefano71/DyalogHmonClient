@@ -3,18 +3,28 @@ using Dyalog.Hmon.Client.Lib;
 using Serilog;
 namespace Dyalog.Hmon.HubSample.Web;
 
-public class HmonHubOrchestratorService : IAsyncDisposable
+public class HmonHubOrchestratorService(HubSampleConfig config, FactAggregator aggregator, WebSocketHub? wsHub = null) : IAsyncDisposable
 {
-  private readonly HmonOrchestrator _orchestrator;
-  private readonly FactAggregator _aggregator;
-  private readonly List<HmonServerConfig> _servers;
+  private readonly HmonOrchestrator _orchestrator = new(new HmonOrchestratorOptions {
+    // Add options as needed (e.g., retry policy)
+  });
+  private readonly FactAggregator _aggregator = aggregator;
+  private readonly List<HmonServerConfig> _servers = config.HmonServers ?? [];
   private readonly CancellationTokenSource _cts = new();
-  private readonly WebSocketHub? _wsHub;
-  private readonly PollListenerConfig? _pollListener;
-  private readonly List<FactType> _pollFactTypes;
-  private readonly int _pollIntervalSeconds;
-  private readonly int _historySize;
-  private readonly List<SubscriptionEvent>? _eventEnums;
+  private readonly WebSocketHub? _wsHub = wsHub;
+  private readonly PollListenerConfig? _pollListener = config.PollListener;
+  private readonly List<FactType> _pollFactTypes = config.PollFacts?
+        .Select(f => FactTypeMap.TryGetValue(f, out var ft) ? ft : (FactType?)null)
+        .Where(ft => ft.HasValue)
+        .Select(ft => ft!.Value)
+        .ToList() ?? [FactType.Host, FactType.Threads];
+  private readonly int _pollIntervalSeconds = config.PollIntervalSeconds ?? 5;
+  private readonly int _historySize = config.EventHistorySize ?? 10;
+  private readonly List<SubscriptionEvent>? _eventEnums = config.EventSubscription?
+        .Select(name => Enum.TryParse<SubscriptionEvent>(name, ignoreCase: true, out var ev) ? ev : (SubscriptionEvent?)null)
+        .Where(ev => ev.HasValue)
+        .Select(ev => ev!.Value)
+        .ToList() ?? [SubscriptionEvent.UntrappedSignal];
   private static readonly Dictionary<string, FactType> FactTypeMap = new(StringComparer.OrdinalIgnoreCase)
     {
         { "host", FactType.Host },
@@ -24,30 +34,7 @@ public class HmonHubOrchestratorService : IAsyncDisposable
         { "suspendedthreads", FactType.SuspendedThreads },
         { "threadcount", FactType.ThreadCount }
     };
-  public HmonHubOrchestratorService(HubSampleConfig config, FactAggregator aggregator, WebSocketHub? wsHub = null)
-  {
-    _aggregator = aggregator;
-    _servers = config.HmonServers ?? [];
-    _wsHub = wsHub;
-    _pollListener = config.PollListener;
-    _pollFactTypes = config.PollFacts?
-        .Select(f => FactTypeMap.TryGetValue(f, out var ft) ? ft : (FactType?)null)
-        .Where(ft => ft.HasValue)
-        .Select(ft => ft!.Value)
-        .ToList() ?? [FactType.Host, FactType.Threads];
-    _pollIntervalSeconds = config.PollIntervalSeconds ?? 5;
-    _historySize = config.EventHistorySize ?? 10;
-    // Map string event names to SubscriptionEvent enum
-    _eventEnums = config.EventSubscription?
-        .Select(name => Enum.TryParse<SubscriptionEvent>(name, ignoreCase: true, out var ev) ? ev : (SubscriptionEvent?)null)
-        .Where(ev => ev.HasValue)
-        .Select(ev => ev!.Value)
-        .ToList() ?? [SubscriptionEvent.UntrappedSignal];
-    _orchestrator = new HmonOrchestrator(new HmonOrchestratorOptions {
-      // Add options as needed (e.g., retry policy)
-    });
-    // REMOVED: The ClientConnected event handler is no longer needed here.
-  }
+
   public Task StartAsync()
   {
     // Start listener if pollListener is configured

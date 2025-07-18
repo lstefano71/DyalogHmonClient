@@ -1,5 +1,6 @@
-using Serilog;
 using Dyalog.Hmon.Client.Lib.Exceptions;
+
+using Serilog;
 
 using System.Collections.Concurrent;
 using System.Net;
