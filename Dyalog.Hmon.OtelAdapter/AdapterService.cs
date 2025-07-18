@@ -218,15 +218,50 @@ public class AdapterService : BackgroundService, IAsyncDisposable
   {
     var sessionId = factsEvent.SessionId != Guid.Empty ? factsEvent.SessionId.ToString() : "default";
     Log.Debug("{session.id} Processing FactsReceivedEvent with {FactCount} facts.",
-  sessionId,
-  factsEvent.Facts.Facts.Count());
+      sessionId,
+      factsEvent.Facts.Facts.Count());
 
+    var sessionAttributes = ExtractSessionAttributes(factsEvent, sessionId);
+    var globalTags = sessionAttributes.Select(kv => new KeyValuePair<string, object?>(kv.Key, kv.Value)).ToArray();
+    var metrics = _sessionMetrics.GetOrAdd(sessionId, _ => new SessionMetrics { Tags = globalTags });
+    metrics.Tags = globalTags;
+
+    foreach (var fact in factsEvent.Facts.Facts) {
+      Log.Debug("{session.id} Mapping fact: {FactType}", sessionId, fact.Name);
+      UpdateCounters(metrics, fact);
+      UpdateSessionMetrics(metrics, fact);
+    }
+  }
+
+  private void UpdateCounters(SessionMetrics metrics, Fact fact)
+  {
+    long prevCompactions = metrics.WorkspaceCompactions;
+    long prevGcCollections = metrics.WorkspaceGcCollections;
+    long prevCpuTime = metrics.AccountCpuTime;
+    long prevConnectTime = metrics.AccountConnectTime;
+    long prevKeyingTime = metrics.AccountKeyingTime;
+
+    if (fact is WorkspaceFact wsFactLocal) {
+      ApplyDelta(prevCompactions, wsFactLocal.Compactions, compactionsCounter, metrics.Tags);
+      ApplyDelta(prevGcCollections, wsFactLocal.GarbageCollections, gcCollectionsCounter, metrics.Tags);
+    } else if (fact is AccountInformationFact accFactLocal) {
+      ApplyDelta(prevCpuTime, accFactLocal.ComputeTime, cpuTimeCounter, metrics.Tags);
+      ApplyDelta(prevConnectTime, accFactLocal.ConnectTime, connectTimeCounter, metrics.Tags);
+      ApplyDelta(prevKeyingTime, accFactLocal.KeyingTime, keyingTimeCounter, metrics.Tags);
+    }
+  }
+
+  private Dictionary<string, object?> ExtractSessionAttributes(FactsReceivedEvent factsEvent, string sessionId)
+  {
     var hostFact = factsEvent.Facts.Facts.OfType<HostFact>().FirstOrDefault();
     var accFactGlobal = factsEvent.Facts.Facts.OfType<AccountInformationFact>().FirstOrDefault();
+    var wsFactGlobal = factsEvent.Facts.Facts.OfType<WorkspaceFact>().FirstOrDefault();
+
     var sessionAttributes = new Dictionary<string, object?> {
       ["service.name"] = _adapterConfig?.ServiceName ?? "HMON-to-OTEL Adapter",
       ["session.id"] = sessionId
     };
+
     if (hostFact != null) {
       sessionAttributes["host.name"] = hostFact.Machine.Name;
       sessionAttributes["process.owner"] = hostFact.Machine.User;
@@ -246,65 +281,42 @@ public class AdapterService : BackgroundService, IAsyncDisposable
       if (!string.IsNullOrEmpty(accFactGlobal.UserIdentification.ToString()))
         sessionAttributes["user_id"] = accFactGlobal.UserIdentification.ToString();
     }
-    var wsFactGlobal = factsEvent.Facts.Facts.OfType<WorkspaceFact>().FirstOrDefault();
     if (wsFactGlobal != null && !string.IsNullOrEmpty(wsFactGlobal.WSID))
       sessionAttributes["wsid"] = wsFactGlobal.WSID;
-    var globalTags = sessionAttributes.Select(kv => new KeyValuePair<string, object?>(kv.Key, kv.Value)).ToArray();
-    var metrics = _sessionMetrics.GetOrAdd(sessionId, _ => new SessionMetrics { Tags = globalTags });
-    metrics.Tags = globalTags;
-    long prevCompactions = metrics.WorkspaceCompactions;
-    long prevGcCollections = metrics.WorkspaceGcCollections;
-    long prevCpuTime = metrics.AccountCpuTime;
-    long prevConnectTime = metrics.AccountConnectTime;
-    long prevKeyingTime = metrics.AccountKeyingTime;
 
-    foreach (var fact in factsEvent.Facts.Facts) {
-      Log.Debug("{session.id} Mapping fact: {FactType}",
-        sessionId,
-        fact.Name);
-      if (fact is WorkspaceFact wsFactLocal) {
-        metrics.WorkspaceMemoryAvailable = wsFactLocal.Available;
-        metrics.WorkspaceMemoryUsed = wsFactLocal.Used;
-        metrics.WorkspaceMemoryAllocation = wsFactLocal.Allocation;
-        metrics.WorkspaceMemoryAllocationHwm = wsFactLocal.AllocationHWM;
+    return sessionAttributes;
+  }
 
-        // Increment counters for cumulative metrics
-        long compactionsDelta = wsFactLocal.Compactions - prevCompactions;
-        if (compactionsDelta > 0 && compactionsCounter != null)
-          compactionsCounter.Add(compactionsDelta, metrics.Tags ?? []);
-        metrics.WorkspaceCompactions = wsFactLocal.Compactions;
-
-        long gcCollectionsDelta = wsFactLocal.GarbageCollections - prevGcCollections;
-        if (gcCollectionsDelta > 0 && gcCollectionsCounter != null)
-          gcCollectionsCounter.Add(gcCollectionsDelta, metrics.Tags ?? []);
-        metrics.WorkspaceGcCollections = wsFactLocal.GarbageCollections;
-
-        metrics.WorkspacePocketsGarbage = wsFactLocal.GarbagePockets;
-        metrics.WorkspacePocketsFree = wsFactLocal.FreePockets;
-        metrics.WorkspacePocketsUsed = wsFactLocal.UsedPockets;
-        metrics.WorkspaceSediment = wsFactLocal.Sediment;
-        metrics.WorkspaceTrapReserveWanted = wsFactLocal.TrapReserveWanted;
-        metrics.WorkspaceTrapReserveActual = wsFactLocal.TrapReserveActual;
-      } else if (fact is AccountInformationFact accFactLocal) {
-        long cpuTimeDelta = accFactLocal.ComputeTime - prevCpuTime;
-        if (cpuTimeDelta > 0 && cpuTimeCounter != null)
-          cpuTimeCounter.Add(cpuTimeDelta, metrics.Tags ?? []);
-        metrics.AccountCpuTime = accFactLocal.ComputeTime;
-
-        long connectTimeDelta = accFactLocal.ConnectTime - prevConnectTime;
-        if (connectTimeDelta > 0 && connectTimeCounter != null)
-          connectTimeCounter.Add(connectTimeDelta, metrics.Tags ?? []);
-        metrics.AccountConnectTime = accFactLocal.ConnectTime;
-
-        long keyingTimeDelta = accFactLocal.KeyingTime - prevKeyingTime;
-        if (keyingTimeDelta > 0 && keyingTimeCounter != null)
-          keyingTimeCounter.Add(keyingTimeDelta, metrics.Tags ?? []);
-        metrics.AccountKeyingTime = accFactLocal.KeyingTime;
-      } else if (fact is ThreadCountFact threadCountFactLocal) {
-        metrics.ThreadsTotal = threadCountFactLocal.Total;
-        metrics.ThreadsSuspended = threadCountFactLocal.Suspended;
-      }
+  private static void UpdateSessionMetrics(SessionMetrics metrics, Fact fact)
+  {
+    if (fact is WorkspaceFact wsFactLocal) {
+      metrics.WorkspaceMemoryAvailable = wsFactLocal.Available;
+      metrics.WorkspaceMemoryUsed = wsFactLocal.Used;
+      metrics.WorkspaceMemoryAllocation = wsFactLocal.Allocation;
+      metrics.WorkspaceMemoryAllocationHwm = wsFactLocal.AllocationHWM;
+      metrics.WorkspaceCompactions = wsFactLocal.Compactions;
+      metrics.WorkspaceGcCollections = wsFactLocal.GarbageCollections;
+      metrics.WorkspacePocketsGarbage = wsFactLocal.GarbagePockets;
+      metrics.WorkspacePocketsFree = wsFactLocal.FreePockets;
+      metrics.WorkspacePocketsUsed = wsFactLocal.UsedPockets;
+      metrics.WorkspaceSediment = wsFactLocal.Sediment;
+      metrics.WorkspaceTrapReserveWanted = wsFactLocal.TrapReserveWanted;
+      metrics.WorkspaceTrapReserveActual = wsFactLocal.TrapReserveActual;
+    } else if (fact is AccountInformationFact accFactLocal) {
+      metrics.AccountCpuTime = accFactLocal.ComputeTime;
+      metrics.AccountConnectTime = accFactLocal.ConnectTime;
+      metrics.AccountKeyingTime = accFactLocal.KeyingTime;
+    } else if (fact is ThreadCountFact threadCountFactLocal) {
+      metrics.ThreadsTotal = threadCountFactLocal.Total;
+      metrics.ThreadsSuspended = threadCountFactLocal.Suspended;
     }
+  }
+
+  private static void ApplyDelta(long previous, long current, Counter<long>? counter, KeyValuePair<string, object?>[]? tags)
+  {
+    long delta = current - previous;
+    if (delta > 0 && counter != null)
+      counter.Add(delta, tags ?? []);
   }
   /// <summary>
   /// Handles notification events from the HMON server, enriching logs with event-specific context.
@@ -411,7 +423,9 @@ public class AdapterService : BackgroundService, IAsyncDisposable
       ["event.type"] = eventType,
       ["event.payload"] = hmonEvent?.ToString() ?? "(null)"
     };
-    _otelLogger.LogWarning("Unknown HMON event received {event.type} {event.payload}", eventType, hmonEvent?.ToString() ?? "(null)");
+    _otelLogger.LogWarningWithContext(logAttributes,
+      "Unknown HMON event received {event.type} {event.payload}", eventType, hmonEvent?.ToString() ?? "(null)"
+      );
   }
   /// <summary>
   /// Disposes resources used by the AdapterService, including orchestrator and telemetry providers.
